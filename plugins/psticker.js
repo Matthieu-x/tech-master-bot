@@ -20,8 +20,38 @@ const path = require('path')
 const crypto = require('crypto')
 const pino = require('pino')
 const dfail = require('../lib/dfail')
+const { stickerPack } = require('../settings')
 
 const DURACION_MAX_SEGUNDOS = 6 // los stickers animados no deben durar mucho
+
+/**
+ * Le agrega al webp la metadata EXIF que WhatsApp muestra debajo del
+ * sticker al mantenerlo presionado (nombre del "pack" y autor).
+ */
+async function agregarMetadataSticker(webpBuffer, nombre, autor) {
+  const webpmux = require('node-webpmux')
+  const img = new webpmux.Image()
+  await img.load(webpBuffer)
+
+  const json = {
+    'sticker-pack-id': 'tech-master-bot',
+    'sticker-pack-name': nombre,
+    'sticker-pack-publisher': autor,
+    emojis: ['🤖'],
+  }
+
+  // Estructura de EXIF mínima requerida por WhatsApp para leer el JSON de arriba.
+  const exifAttr = Buffer.from([
+    0x49, 0x49, 0x2A, 0x00, 0x08, 0x00, 0x00, 0x00, 0x01, 0x00, 0x41, 0x57,
+    0x07, 0x00, 0x00, 0x00, 0x00, 0x00, 0x16, 0x00, 0x00, 0x00,
+  ])
+  const jsonBuffer = Buffer.from(JSON.stringify(json), 'utf-8')
+  const exif = Buffer.concat([exifAttr, jsonBuffer])
+  exif.writeUIntLE(jsonBuffer.length, 14, 4)
+
+  img.exif = exif
+  return img.save(null)
+}
 
 function ejecutar(comando) {
   return new Promise((resolve, reject) => {
@@ -115,7 +145,14 @@ let handler = async (m, { conn }) => {
       webpBuffer = fs.readFileSync(rutaSalida)
     }
 
-    await conn.sendMessage(m.chat, { sticker: webpBuffer }, { quoted: m.raw })
+    // Agregamos el nombre del pack y autor -> aparece al mantener presionado el sticker
+    const webpConMetadata = await agregarMetadataSticker(
+      webpBuffer,
+      stickerPack?.nombre || 'Tech Master Bot',
+      stickerPack?.autor || 'Tech Master Bot'
+    )
+
+    await conn.sendMessage(m.chat, { sticker: webpConMetadata }, { quoted: m.raw })
   } catch (e) {
     console.log('Error creando sticker:', e)
     const pistaFfmpeg = tipo === 'video'
