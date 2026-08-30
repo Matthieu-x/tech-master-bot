@@ -85,12 +85,10 @@ async function handler(conn, m) {
 
   // 5) Si el plugin es solo para owners, validamos
   if (plugin.owner) {
-    // OJO: en WhatsApp multi-dispositivo, m.sender puede venir como
-    // "5049730537:12@s.whatsapp.net" (con sufijo de dispositivo antes
-    // de la @). Hay que quitar la parte de "@" y ":" ANTES de limpiar
-    // los dígitos, o el número queda mezclado con el sufijo y nunca
-    // coincide con el de settings.js aunque esté bien puesto.
-    const numeroSender = m.sender.split('@')[0].split(':')[0].replace(/[^0-9]/g, '')
+    // Usamos senderNumero (número de teléfono real) en vez de sender,
+    // porque sender puede ser un @lid en grupos con el sistema nuevo de
+    // WhatsApp, y ahí nunca coincidiría con el número puesto en settings.js.
+    const numeroSender = (m.senderNumero || m.sender).split('@')[0].split(':')[0].replace(/[^0-9]/g, '')
     const numerosOwner = owner.map(o => o[0].replace(/[^0-9]/g, ''))
     if (!numerosOwner.includes(numeroSender)) {
       return conn.sendMessage(m.chat, { text: dfail('Este comando es solo para el owner.') }, { quoted: m.raw })
