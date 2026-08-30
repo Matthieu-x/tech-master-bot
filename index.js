@@ -26,6 +26,7 @@ const handler = require('./handler')
 const { numeroBot } = require('./settings')
 const { iniciarAutoUpdate } = require('./lib/autoupdate')
 const { mostrarBannerInicio, mostrarConexionExitosa } = require('./lib/banner')
+const { manejarParticipantes } = require('./lib/welcome')
 
 // Helper para pedir el número por consola (solo se usa si no llenaste
 // global.numeroBot en settings.js ni pasaste el número como argumento)
@@ -146,6 +147,17 @@ async function iniciar() {
       await handler(conn, m)
     } catch (e) {
       console.log('Error en handler:', e)
+    }
+  })
+
+  // Escucha entradas/salidas de grupo (para welcome/despedida).
+  // La lógica de qué mandar y si está activado vive en lib/welcome.js,
+  // así este archivo no se llena de texto de mensajes.
+  conn.ev.on('group-participants.update', async (evento) => {
+    try {
+      await manejarParticipantes(conn, evento)
+    } catch (e) {
+      console.log('Error en group-participants.update:', e)
     }
   })
 
