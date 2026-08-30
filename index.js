@@ -15,6 +15,7 @@ const {
   useMultiFileAuthState,
   DisconnectReason,
   fetchLatestBaileysVersion,
+  delay,
 } = require('@whiskeysockets/baileys')
 
 const pino = require('pino')
@@ -61,33 +62,49 @@ async function iniciar() {
 
   console.log('ꕥ Socket creado.')
 
+  // Número a usar para el pairing code (se resuelve una sola vez aquí,
+  // antes de que llegue el evento 'connecting', para no preguntarlo dos veces
+  // si connection.update dispara más de una vez).
+  let numeroParaCodigo = null
+  let codigoYaSolicitado = false
+
   if (usarCodigoVinculacion) {
     // Orden de prioridad para el número:
     // 1) argumento al arrancar -> node index.js 521XXXXXXXXXX
     // 2) global.numeroBot en settings.js (si lo llenaste)
     // 3) preguntarlo por consola (puede no funcionar en paneles sin stdin real)
     const numeroArgumento = process.argv[2]
-    const numero = (numeroArgumento && numeroArgumento.trim())
+    numeroParaCodigo = (numeroArgumento && numeroArgumento.trim())
       ? numeroArgumento.trim()
       : (numeroBot && numeroBot.trim())
         ? numeroBot.trim()
         : await preguntar('Ingresa el número de WhatsApp del bot (con código de país, sin +): ')
-
-    console.log(`ꕥ Solicitando código de vinculación para ${numero}...`)
-
-    // requestPairingCode(numero) -> WhatsApp genera un código aleatorio
-    // (sin personalizar) y lo muestra en el celular real para confirmar.
-    const codigo = await conn.requestPairingCode(numero.replace(/[^0-9]/g, ''))
-    console.log(`ꕥ Código de vinculación: ${codigo}`)
-    console.log('> Ve a WhatsApp > Dispositivos vinculados > Vincular con número de teléfono, e ingresa este código.')
   }
 
   // Guarda credenciales cada vez que cambian
   conn.ev.on('creds.update', saveCreds)
 
   // Maneja reconexión automática si el bot se cae
-  conn.ev.on('connection.update', (update) => {
+  conn.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect } = update
+
+    // IMPORTANTE (@itsliaaa/baileys): el pairing code NO se debe pedir justo
+    // después de crear el socket. Hay que esperar a que la conexión llegue
+    // a 'connecting' y dar un pequeño margen (delay) antes de solicitarlo,
+    // o WhatsApp responde "No se pudo vincular el dispositivo".
+    if (connection === 'connecting' && usarCodigoVinculacion && !codigoYaSolicitado) {
+      codigoYaSolicitado = true
+      await delay(1500)
+      try {
+        console.log(`ꕥ Solicitando código de vinculación para ${numeroParaCodigo}...`)
+        const codigo = await conn.requestPairingCode(numeroParaCodigo.replace(/[^0-9]/g, ''))
+        console.log(`ꕥ Código de vinculación: ${codigo}`)
+        console.log('> Ve a WhatsApp > Dispositivos vinculados > Vincular con número de teléfono, e ingresa este código.')
+      } catch (e) {
+        console.log('Error solicitando el código de vinculación:', e)
+        codigoYaSolicitado = false // permite reintentar si vuelve a pasar por 'connecting'
+      }
+    }
 
     if (connection === 'close') {
       const razon = lastDisconnect?.error?.output?.statusCode
