@@ -14,6 +14,7 @@ const {
   default: makeWASocket,
   useMultiFileAuthState,
   DisconnectReason,
+  fetchLatestBaileysVersion,
 } = require('@whiskeysockets/baileys')
 
 const pino = require('pino')
@@ -43,12 +44,15 @@ async function iniciar() {
   // Solo se pide vincular por código si todavía no hay sesión registrada
   const usarCodigoVinculacion = !state.creds.registered
 
-  // OJO: no llamamos fetchLatestBaileysVersion() aquí. ultra-baileys ya
-  // trae una versión de WA "fijada" por defecto (lo dice su propio banner
-  // al arrancar). Pedirla nosotros mismos hace una petición HTTP externa
-  // que en varios hostings (HidenCloud incluido) se queda colgada sin
-  // avisar, y por eso el bot parecía no ejecutar nada.
+  // Pedimos la versión más reciente del protocolo de WhatsApp Web.
+  // Con @itsliaaa/baileys (a diferencia de ultra-baileys) SÍ hace falta
+  // pedirla explícitamente, o WhatsApp rechaza la vinculación por versión
+  // desactualizada ("No se pudo vincular el dispositivo").
+  const { version } = await fetchLatestBaileysVersion()
+  console.log(`ꕥ Usando versión de WhatsApp Web: ${version.join('.')}`)
+
   const conn = makeWASocket({
+    version,
     auth: state,
     printQRInTerminal: false, // desactivado: usamos código de vinculación, no QR
     logger: pino({ level: 'silent' }), // silencia los logs internos de baileys
