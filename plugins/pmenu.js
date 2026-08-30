@@ -1,24 +1,11 @@
-/**
- * plugins/pmenu.js
- * -------------------------------------------------------
- * Menú principal de Tech Master Bot.
- * Genera automáticamente los comandos disponibles.
- *
- * FIX: el envío de imagen desde URL externa se colgaba sin
- * error en el hosting (petición de red que nunca resuelve),
- * dejando el bot "sin responder". Ahora tiene un timeout: si
- * la imagen tarda más de 10s, se cancela sola y manda el
- * menú en texto plano en su lugar.
- * -------------------------------------------------------
- */
-
 const fs = require('fs')
 const path = require('path')
 
-const { botName, creators } = require('../settings')
+const { botName } = require('../settings')
+const { leerDB } = require('../lib/db')
 
 const IMAGEN_MENU = path.join(__dirname, '..', 'lib', 'master.jpg')
-const TIMEOUT_IMAGEN_MS = 10_000 // por si acaso, aunque ya es un archivo local
+const TIMEOUT_IMAGEN_MS = 10_000
 
 function cargarComandos() {
   const pluginsDir = path.join(__dirname)
@@ -26,7 +13,6 @@ function cargarComandos() {
   const grupos = {}
 
   for (const archivo of archivos) {
-    // Nos saltamos este mismo archivo para no re-requerirse a sí mismo
     if (archivo === path.basename(__filename)) continue
 
     try {
@@ -34,15 +20,13 @@ function cargarComandos() {
       delete require.cache[require.resolve(ruta)]
       const plugin = require(ruta)
 
-      if (typeof plugin !== 'function' || !Array.isArray(plugin.command)) continue
+      if (typeof plugin !== 'function' || !Array.isArray(plugin.command) || !plugin.command.length) continue
 
       const categoria = Array.isArray(plugin.tags) && plugin.tags.length ? plugin.tags[0] : 'general'
       if (!grupos[categoria]) grupos[categoria] = []
 
-      for (const comando of plugin.command) {
-        const cmd = String(comando).toLowerCase()
-        if (!grupos[categoria].includes(cmd)) grupos[categoria].push(cmd)
-      }
+      const [principal, ...alias] = plugin.command.map(c => String(c).toLowerCase())
+      grupos[categoria].push({ principal, alias })
     } catch (e) {
       console.log(`ꕥ\n> Error leyendo ${archivo}: ${e.message}`)
     }
@@ -61,19 +45,15 @@ function crearMenu(prefijo) {
     if (!comandos.length) continue
 
     menuComandos += `\n〄 *${categoria.toUpperCase()}*\n`
-    for (const comando of comandos) {
-      menuComandos += `> ✐ ${prefijo}${comando}\n`
+    for (const { principal, alias } of comandos) {
+      const listaCompleta = [principal, ...alias].map(c => prefijo + c).join(', ')
+      menuComandos += `> ✐ ${listaCompleta}\n`
     }
   }
 
   return menuComandos
 }
 
-/**
- * Envuelve una promesa con un límite de tiempo. Si no resuelve a tiempo,
- * la rechaza manualmente para que el catch de afuera sí pueda actuar
- * (a diferencia de dejar la petición colgada para siempre).
- */
 function conTimeout(promesa, ms) {
   return Promise.race([
     promesa,
@@ -85,25 +65,19 @@ let handler = async (m, { conn, usedPrefix }) => {
   const prefijo = usedPrefix || '#'
   const numeroMencion = String(m.sender || '').split('@')[0]
 
-  const listaCreadores = Array.isArray(creators)
-    ? creators
-        .filter(c => c && c.nombre)
-        .map(c => `> ࿇ ${c.nombre} — ${c.rol || 'Creador'}`)
-        .join('\n')
-    : '> ࿇ Equipo Tech Master'
-
   const comandos = crearMenu(prefijo)
+
+  const usuarios = leerDB()
+  const totalRegistrados = Object.values(usuarios).filter(u => u?.registrado).length
 
   const texto =
     `ꕥ *${botName}*\n` +
     `❧ Hola @${numeroMencion}, bienvenido\n\n` +
+    `𖣔 *Usuarios registrados:* ${totalRegistrados}\n\n` +
     `✰ *Comandos disponibles*${comandos}\n` +
-    `𖣔 *Creadores*\n${listaCreadores}\n\n` +
-    `> 💡 Ejemplo: ${prefijo}ping`
+    `> ࿇ Ejemplo: ${prefijo}ping`
 
   try {
-    // Intenta con imagen local. Si no existe el archivo o falla la lectura,
-    // cae al texto plano (el try/catch cubre ambos casos).
     await conTimeout(
       conn.sendMessage(
         m.chat,
