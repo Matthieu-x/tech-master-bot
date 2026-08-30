@@ -1,14 +1,3 @@
-/**
- * handler.js
- * -------------------------------------------------------
- * Cerebro del bot. Se encarga de:
- *   1. Leer todos los plugins de la carpeta /plugins
- *   2. Revisar cada mensaje entrante
- *   3. Ver si el texto empieza con el prefijo + un comando
- *      que exista en algún plugin, y ejecutarlo
- * -------------------------------------------------------
- */
-
 const fs = require('fs')
 const path = require('path')
 const dfail = require('./lib/dfail')
