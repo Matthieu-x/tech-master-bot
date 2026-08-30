@@ -1,9 +1,11 @@
 /**
  * handler.js
  * -------------------------------------------------------
- * Cerebro del bot.
- * Detecta prefijos, comandos y ejecuta plugins.
- * Compatible con distintos tipos de mensajes de WhatsApp.
+ * Cerebro del bot. Se encarga de:
+ *   1. Leer todos los plugins de la carpeta /plugins
+ *   2. Revisar cada mensaje entrante
+ *   3. Ver si el texto empieza con el prefijo + un comando
+ *      que exista en algún plugin, y ejecutarlo
  * -------------------------------------------------------
  */
 
@@ -14,190 +16,93 @@ const { prefix, owner } = require('./settings')
 
 const pluginsDir = path.join(__dirname, 'plugins')
 
+/**
+ * Carga (o recarga) todos los plugins de la carpeta /plugins.
+ * Usamos delete require.cache para poder agregar/editar plugins
+ * en caliente sin tener que reiniciar el bot (ej: con savefile.js).
+ */
 function loadPlugins() {
   const plugins = []
 
-  if (!fs.existsSync(pluginsDir)) {
-    console.log(dfail('La carpeta plugins no existe.'))
-    return plugins
-  }
-
-  const archivos = fs
-    .readdirSync(pluginsDir)
-    .filter(f => f.endsWith('.js'))
+  const archivos = fs.readdirSync(pluginsDir).filter(f => f.endsWith('.js'))
 
   for (const archivo of archivos) {
-    const ruta = path.join(pluginsDir, archivo)
-
+    const rutaCompleta = path.join(pluginsDir, archivo)
     try {
-      delete require.cache[require.resolve(ruta)]
-
-      const plugin = require(ruta)
-
-      if (typeof plugin !== 'function') {
-        console.log(dfail(`Plugin inválido: ${archivo}`))
-        continue
-      }
-
+      delete require.cache[require.resolve(rutaCompleta)]
+      const plugin = require(rutaCompleta)
       plugin.filename = archivo
       plugins.push(plugin)
     } catch (e) {
-      console.log(
-        dfail(`Error cargando ${archivo}: ${e.message}`)
-      )
+      console.log(dfail(`Error cargando el plugin ${archivo}: ${e.message}`))
     }
   }
 
   return plugins
 }
 
-function obtenerTexto(m) {
-  if (!m || !m.message) return ''
-
-  let message = m.message
-
-  // Mensajes encapsulados
-  if (message.ephemeralMessage?.message) {
-    message = message.ephemeralMessage.message
-  }
-
-  if (message.viewOnceMessage?.message) {
-    message = message.viewOnceMessage.message
-  }
-
-  if (message.viewOnceMessageV2?.message) {
-    message = message.viewOnceMessageV2.message
-  }
-
-  if (message.viewOnceMessageV2Extension?.message) {
-    message = message.viewOnceMessageV2Extension.message
-  }
-
-  return (
-    message.conversation ||
-    message.extendedTextMessage?.text ||
-    message.imageMessage?.caption ||
-    message.videoMessage?.caption ||
-    message.documentMessage?.caption ||
-    message.buttonsResponseMessage?.selectedButtonId ||
-    message.listResponseMessage?.singleSelectReply?.selectedRowId ||
-    message.templateButtonReplyMessage?.selectedId ||
-    ''
-  )
-}
-
+/**
+ * Procesa un mensaje entrante y ejecuta el plugin que corresponda.
+ *
+ * @param {object} conn   - socket de baileys (ultra-baileys)
+ * @param {object} m      - mensaje ya "serializado" (chat, sender, text, etc.)
+ */
 async function handler(conn, m) {
   const plugins = loadPlugins()
 
-  // Hooks globales
+  // 1) Hooks "all": corren en TODOS los mensajes, tengan o no comando
+  //    (útil para anti-link, contadores, etc.)
   for (const plugin of plugins) {
     if (typeof plugin.all === 'function') {
       try {
         await plugin.all(m, { conn })
       } catch (e) {
-        console.log(
-          dfail(
-            `Error en hook all de ${plugin.filename}: ${e.message}`
-          )
-        )
+        console.log(dfail(`Error en hook 'all' de ${plugin.filename}: ${e.message}`))
       }
     }
   }
 
   if (!m.text) return
 
-  const textoOriginal = String(m.text).trim()
+  // 2) ¿El mensaje empieza con un prefijo válido?
+  const usedPrefix = (m.text.match(prefix) || [])[0]
+  if (!usedPrefix) return
 
-  if (!textoOriginal) return
-
-  // Detectar prefijo
-  const match = textoOriginal.match(prefix)
-
-  if (!match) return
-
-  const usedPrefix = match[0]
-
-  const contenido = textoOriginal
-    .slice(usedPrefix.length)
-    .trim()
-
-  if (!contenido) return
-
-  const partes = contenido.split(/\s+/)
-
-  const command = partes.shift().toLowerCase()
-
-  const args = partes
-
-  const text = args.join(' ')
+  // 3) Separamos comando y argumentos
+  //    Ej: "#saludo Matthieu"  ->  command="saludo"  args=["Matthieu"]
+  const sinPrefijo = m.text.slice(usedPrefix.length).trim()
+  const [command, ...args] = sinPrefijo.split(/\s+/)
+  const text = sinPrefijo.slice(command.length).trim()
 
   if (!command) return
 
-  // Buscar plugin
-  const plugin = plugins.find(plugin => {
-    if (!Array.isArray(plugin.command)) return false
+  // 4) Buscamos un plugin cuyo handler.command incluya este comando
+  const plugin = plugins.find(
+    p => Array.isArray(p.command) && p.command.includes(command.toLowerCase())
+  )
 
-    return plugin.command.some(
-      cmd => String(cmd).toLowerCase() === command
-    )
-  })
+  if (!plugin) return // no existe el comando, simplemente se ignora
 
-  if (!plugin) return
-
-  // Comandos exclusivos del owner
+  // 5) Si el plugin es solo para owners, validamos
   if (plugin.owner) {
-    const numeroSender = String(m.sender || '')
-      .replace(/[^0-9]/g, '')
-
-    const numerosOwner = Array.isArray(owner)
-      ? owner.map(o =>
-          String(o?.[0] || '')
-            .replace(/[^0-9]/g, '')
-        )
-      : []
-
+    // OJO: en WhatsApp multi-dispositivo, m.sender puede venir como
+    // "5049730537:12@s.whatsapp.net" (con sufijo de dispositivo antes
+    // de la @). Hay que quitar la parte de "@" y ":" ANTES de limpiar
+    // los dígitos, o el número queda mezclado con el sufijo y nunca
+    // coincide con el de settings.js aunque esté bien puesto.
+    const numeroSender = m.sender.split('@')[0].split(':')[0].replace(/[^0-9]/g, '')
+    const numerosOwner = owner.map(o => o[0].replace(/[^0-9]/g, ''))
     if (!numerosOwner.includes(numeroSender)) {
-      return conn.sendMessage(
-        m.chat,
-        {
-          text: dfail(
-            '❌ Este comando es exclusivo del owner.'
-          )
-        },
-        {
-          quoted: m.raw
-        }
-      )
+      return conn.sendMessage(m.chat, { text: dfail('Este comando es solo para el owner.') }, { quoted: m.raw })
     }
   }
 
+  // 6) Ejecutamos el plugin
   try {
-    await plugin(m, {
-      conn,
-      args,
-      text,
-      command,
-      usedPrefix
-    })
+    await plugin(m, { conn, args, text, command, usedPrefix })
   } catch (e) {
-    console.error(
-      `Error ejecutando ${command}:`,
-      e
-    )
-
-    try {
-      await conn.sendMessage(
-        m.chat,
-        {
-          text: dfail(
-            `❌ Ocurrió un error ejecutando el comando:\n> ${e.message}`
-          )
-        },
-        {
-          quoted: m.raw
-        }
-      )
-    } catch {}
+    console.log(e)
+    await conn.sendMessage(m.chat, { text: dfail(`Ocurrió un error ejecutando el comando:\n> ${e.message}`) }, { quoted: m.raw })
   }
 }
 
