@@ -29,5 +29,6 @@ let handler = async (m, { conn }) => {
 handler.help = ['ping']
 handler.tags = ['general']
 handler.command = ['ping']
+handler.registro = false // probar si el bot responde no debería requerir registro
 
 module.exports = handler
