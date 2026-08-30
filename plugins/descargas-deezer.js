@@ -17,8 +17,8 @@ const busquedasPendientes = new Map()
 
 function limpiarBusquedasVencidas() {
   const ahora = Date.now()
-  for (const [id, datos] of busquedasPendientes) {
-    if (ahora - datos.creada > TTL_BUSQUEDA_MS) busquedasPendientes.delete(id)
+  for (const [numero, datos] of busquedasPendientes) {
+    if (ahora - datos.creada > TTL_BUSQUEDA_MS) busquedasPendientes.delete(numero)
   }
 }
 
@@ -159,29 +159,20 @@ let handler = async (m, { conn, text }) => {
       return conn.sendMessage(m.chat, { text: dfail('No encontré resultados para esa búsqueda.') }, { quoted: m.raw })
     }
 
-    const searchId = crypto.randomBytes(4).toString('hex')
-    busquedasPendientes.set(searchId, { numero, chat: m.chat, resultados, creada: ahora })
+    busquedasPendientes.set(numero, { chat: m.chat, resultados, creada: ahora })
 
-    const rows = resultados.map((r, i) => {
+    const lineas = resultados.map((r, i) => {
       const duracion = formatearDuracion(r.duration)
-      return {
-        title: (r.title || 'Sin título').slice(0, 60),
-        description: `${r.artist || 'Desconocido'}${duracion ? ` • ${duracion}` : ''}`,
-        rowId: `deezer|${searchId}|${i}`,
-      }
+      return `*${i + 1}.* ${r.title || 'Sin título'} - ${r.artist || 'Desconocido'}${duracion ? ` (${duracion})` : ''}`
     })
 
-    await conn.sendMessage(
-      m.chat,
-      {
-        text: `ꕥ Resultados para *"${busqueda}"*\n> Elige una canción de la lista (cuesta ${COSTO_MASTERCOINS} 🪙 MASTERCOINS).`,
-        footer: 'Tech Master Bot',
-        title: '🎵 Deezer',
-        buttonText: '📋 Ver resultados',
-        sections: [{ title: 'Resultados', rows }],
-      },
-      { quoted: m.raw }
-    )
+    const texto =
+      `ꕥ Resultados para *"${busqueda}"*\n\n` +
+      `${lineas.join('\n')}\n\n` +
+      `> Responde con el número (ej: *1*) para descargarla.\n` +
+      `> Cuesta ${COSTO_MASTERCOINS} 🪙 MASTERCOINS. Tienes 3 minutos para elegir.`
+
+    await conn.sendMessage(m.chat, { text: texto }, { quoted: m.raw })
   } catch (error) {
     const mensaje = error.name === 'AbortError' ? 'La API tardó demasiado en responder.' : error.message
     console.log('Error en Deezer (búsqueda):', mensaje)
@@ -190,24 +181,24 @@ let handler = async (m, { conn, text }) => {
 }
 
 handler.all = async (m, { conn }) => {
-  const selectedRowId = m.raw.message?.listResponseMessage?.singleSelectReply?.selectedRowId
-  if (!selectedRowId || !selectedRowId.startsWith('deezer|')) return
+  const numero = numeroDeSender(m)
+  const busquedaGuardada = busquedasPendientes.get(numero)
+  if (!busquedaGuardada) return
+  if (m.chat !== busquedaGuardada.chat) return
 
-  const [, searchId, indiceTexto] = selectedRowId.split('|')
-  const busquedaGuardada = busquedasPendientes.get(searchId)
+  const textoLimpio = String(m.text || '').trim()
+  if (!/^[1-5]$/.test(textoLimpio)) return
 
-  if (!busquedaGuardada) {
-    return conn.sendMessage(m.chat, { text: dfail('Esta lista ya expiró, busca la canción de nuevo.') }, { quoted: m.raw })
+  limpiarBusquedasVencidas()
+  if (!busquedasPendientes.has(numero)) {
+    return conn.sendMessage(m.chat, { text: dfail('Esa búsqueda ya expiró, busca la canción de nuevo.') }, { quoted: m.raw })
   }
 
-  if (numeroDeSender(m) !== busquedaGuardada.numero) return
+  const indice = Number(textoLimpio) - 1
+  const resultado = busquedaGuardada.resultados[indice]
+  if (!resultado) return
 
-  busquedasPendientes.delete(searchId)
-
-  const resultado = busquedaGuardada.resultados[Number(indiceTexto)]
-  if (!resultado) {
-    return conn.sendMessage(m.chat, { text: dfail('Esa opción ya no es válida.') }, { quoted: m.raw })
-  }
+  busquedasPendientes.delete(numero)
 
   const usuario = obtenerUsuario(m)
   if ((usuario?.mastercoins || 0) < COSTO_MASTERCOINS) {
