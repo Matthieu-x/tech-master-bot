@@ -1,20 +1,7 @@
-/**
- * settings.js
- * -------------------------------------------------------
- * Configuración central del bot. Todo lo que cambie poco
- * (nombre, prefijo, owners, créditos) va aquí para no andar
- * buscando entre el código.
- * -------------------------------------------------------
- */
-
-// Nombre del bot, se usa en el menú y mensajes generales
 global.botName = 'Tech Master Bot'
 
-// Prefijo(s) aceptados antes de un comando. Ej: #ping, !ping, .ping
 global.prefix = /^[#!./]/
 
-// Owners del bot -> pueden usar comandos exclusivos (ej: savefile).
-// Formato: [ 'numero_sin_+_ni_espacios', 'Nombre' ]
 global.owner = [
   ['584223342535', 'Matthieu'],
   ['51910227479', 'AmilcarGit'],
@@ -22,22 +9,25 @@ global.owner = [
   ['5493875132593', 'Benja'],
 ]
 
-// Créditos / creadores del proyecto (para el menú, about, etc.)
-// Deja el objeto vacío tal cual para la vacante que vas a llenar después.
 global.creators = [
   { nombre: 'Matthieu', rol: 'Creador' },
   { nombre: 'AmilcarGit', rol: 'Creador' },
   { nombre: 'Damian', rol: 'Creador' },
-  { nombre: 'Benja', rol: 'Creador' }, // <-- vacante, se agrega después
+  { nombre: 'Benja', rol: 'Creador' },
 ]
 
-// Texto que aparece debajo del sticker al mantenerlo presionado en WhatsApp.
 global.stickerPack = {
   nombre: global.botName,
   autor: 'Tech Master Bot',
 }
 
 global.evogbApiKey = 'evogb-SNjiEiMu'
+
+global.autoUpdatePuerto = 3001
+
+global.autoUpdateSecreto = 'cambia-esto-por-un-secreto-largo'
+
+global.autoUpdateRama = 'main'
 
 module.exports = {
   botName: global.botName,
@@ -46,4 +36,7 @@ module.exports = {
   creators: global.creators,
   stickerPack: global.stickerPack,
   evogbApiKey: global.evogbApiKey,
+  autoUpdatePuerto: global.autoUpdatePuerto,
+  autoUpdateSecreto: global.autoUpdateSecreto,
+  autoUpdateRama: global.autoUpdateRama,
 }
