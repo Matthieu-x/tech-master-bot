@@ -62,24 +62,24 @@ async function iniciar() {
 
   console.log('ꕥ Socket creado.')
 
-  // Número a usar para el pairing code (se resuelve una sola vez aquí,
-  // antes de que llegue el evento 'connecting', para no preguntarlo dos veces
-  // si connection.update dispara más de una vez).
-  let numeroParaCodigo = null
+  // Promesa con el número a usar para el pairing code. Se crea de inmediato
+  // (síncronamente) para no perder el evento 'connecting' mientras se
+  // resuelve -- si primero preguntábamos el número y LUEGO registrábamos el
+  // listener, el socket podía llegar a 'connecting' durante esa espera y el
+  // evento se perdía (por eso a veces se quedaba colgado sin pedir código).
   let codigoYaSolicitado = false
-
-  if (usarCodigoVinculacion) {
-    // Orden de prioridad para el número:
-    // 1) argumento al arrancar -> node index.js 521XXXXXXXXXX
-    // 2) global.numeroBot en settings.js (si lo llenaste)
-    // 3) preguntarlo por consola (puede no funcionar en paneles sin stdin real)
-    const numeroArgumento = process.argv[2]
-    numeroParaCodigo = (numeroArgumento && numeroArgumento.trim())
-      ? numeroArgumento.trim()
-      : (numeroBot && numeroBot.trim())
-        ? numeroBot.trim()
-        : await preguntar('Ingresa el número de WhatsApp del bot (con código de país, sin +): ')
-  }
+  const numeroParaCodigoPromise = usarCodigoVinculacion
+    ? (async () => {
+        // Orden de prioridad para el número:
+        // 1) argumento al arrancar -> node index.js 521XXXXXXXXXX
+        // 2) global.numeroBot en settings.js (si lo llenaste)
+        // 3) preguntarlo por consola (puede no funcionar en paneles sin stdin real)
+        const numeroArgumento = process.argv[2]
+        if (numeroArgumento && numeroArgumento.trim()) return numeroArgumento.trim()
+        if (numeroBot && numeroBot.trim()) return numeroBot.trim()
+        return preguntar('Ingresa el número de WhatsApp del bot (con código de país, sin +): ')
+      })()
+    : null
 
   // Guarda credenciales cada vez que cambian
   conn.ev.on('creds.update', saveCreds)
@@ -94,6 +94,7 @@ async function iniciar() {
     // o WhatsApp responde "No se pudo vincular el dispositivo".
     if (connection === 'connecting' && usarCodigoVinculacion && !codigoYaSolicitado) {
       codigoYaSolicitado = true
+      const numeroParaCodigo = await numeroParaCodigoPromise
       await delay(1500)
       try {
         console.log(`ꕥ Solicitando código de vinculación para ${numeroParaCodigo}...`)
