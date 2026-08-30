@@ -7,6 +7,7 @@ global.owner = [
   ['51910227479', 'AmilcarGit'],
   ['542645746772', 'Damian'],
   ['5493875132593', 'Benja'],
+  ['573225396540', 'sprohub'],
 ]
 
 global.creators = [
@@ -14,6 +15,7 @@ global.creators = [
   { nombre: 'AmilcarGit', rol: 'Creador' },
   { nombre: 'Damian', rol: 'Creador' },
   { nombre: 'Benja', rol: 'Creador' },
+  { nombre: 'sprohub', rol: 'colaborador' },
 ]
 
 global.stickerPack = {
