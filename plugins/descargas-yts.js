@@ -108,7 +108,7 @@ let handler = async (m, { conn, text, usedPrefix }) => {
 }
 
 handler.help = ['yts <búsqueda>', 'ytsearch <búsqueda>']
-handler.tags = ['search']
+handler.tags = ['downloader']
 handler.command = ['yts', 'ytsearch']
 handler.registro = false
 
