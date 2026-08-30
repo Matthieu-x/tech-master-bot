@@ -18,6 +18,7 @@ global.prefix = /^[#!./]/
 global.owner = [
   ['5049730537', 'Matthieu'],
   ['51910227479', 'AmilcarGit'],
+  ['542645746772', 'Damian'],
 ]
 
 // Créditos / creadores del proyecto (para el menú, about, etc.)
@@ -26,7 +27,7 @@ global.creators = [
   { nombre: 'Matthieu', rol: 'Creador' },
   { nombre: 'AmilcarGit', rol: 'Creador' },
   { nombre: 'Damian', rol: 'Creador' },
-  { nombre: '', rol: '' }, // <-- vacante, se agrega después
+  { nombre: 'Benja', rol: 'Creador' }, // <-- vacante, se agrega después
 ]
 
 // Texto que aparece debajo del sticker al mantenerlo presionado en WhatsApp.
