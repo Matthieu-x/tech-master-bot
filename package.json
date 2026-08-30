@@ -1,0 +1,14 @@
+{
+  "name": "tech-master-bot",
+  "version": "1.0.0",
+  "description": "Base de bot de WhatsApp - Tech Master Bot",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "baileys": "github:russellxz/ultra-baileys",
+    "pino": "^8.0.0",
+    "qrcode-terminal": "^0.12.0"
+  }
+}
