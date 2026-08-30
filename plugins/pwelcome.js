@@ -33,8 +33,9 @@ let handler = async (m, { conn, command, args }) => {
     )
   }
 
-  const campo = command === 'bye' ? 'bye' : 'welcome'
-  guardarGrupo(m.chat, { [campo]: accion === 'on' })
+  const comandoNormalizado = String(command || '').toLowerCase()
+  const campo = comandoNormalizado === 'bye' ? 'bye' : 'welcome'
+  await guardarGrupo(m.chat, { [campo]: accion === 'on' })
 
   const nombreFeature = campo === 'welcome' ? 'Bienvenida' : 'Despedida'
   await conn.sendMessage(
