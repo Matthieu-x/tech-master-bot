@@ -13,6 +13,7 @@ const fs = require('fs')
 const path = require('path')
 const dfail = require('./lib/dfail')
 const { prefix, owner } = require('./settings')
+const { obtenerGrupo } = require('./lib/db')
 
 const pluginsDir = path.join(__dirname, 'plugins')
 
@@ -76,9 +77,26 @@ async function handler(conn, m) {
 
   if (!command) return
 
+  const commandLower = command.toLowerCase()
+
+  // Número de teléfono real del que escribió (por si es @lid, ver nota abajo)
+  const numeroSender = (m.senderNumero || m.sender).split('@')[0].split(':')[0].replace(/[^0-9]/g, '')
+  const numerosOwner = owner.map(o => o[0].replace(/[^0-9]/g, ''))
+  const esOwnerGlobal = numerosOwner.includes(numeroSender)
+
+  // 3.5) ¿El bot está apagado en este grupo? Si es así, se ignora
+  //    cualquier comando MENOS "bot" (para poder reactivarlo) y menos
+  //    si quien escribe es el owner global (siempre puede pasar).
+  if (m.isGroup) {
+    const config = obtenerGrupo(m.chat)
+    if (config.botOff && commandLower !== 'bot' && !esOwnerGlobal) {
+      return
+    }
+  }
+
   // 4) Buscamos un plugin cuyo handler.command incluya este comando
   const plugin = plugins.find(
-    p => Array.isArray(p.command) && p.command.includes(command.toLowerCase())
+    p => Array.isArray(p.command) && p.command.includes(commandLower)
   )
 
   if (!plugin) return // no existe el comando, simplemente se ignora
@@ -88,9 +106,7 @@ async function handler(conn, m) {
     // Usamos senderNumero (número de teléfono real) en vez de sender,
     // porque sender puede ser un @lid en grupos con el sistema nuevo de
     // WhatsApp, y ahí nunca coincidiría con el número puesto en settings.js.
-    const numeroSender = (m.senderNumero || m.sender).split('@')[0].split(':')[0].replace(/[^0-9]/g, '')
-    const numerosOwner = owner.map(o => o[0].replace(/[^0-9]/g, ''))
-    if (!numerosOwner.includes(numeroSender)) {
+    if (!esOwnerGlobal) {
       return conn.sendMessage(m.chat, { text: dfail('Este comando es solo para el owner.') }, { quoted: m.raw })
     }
   }
