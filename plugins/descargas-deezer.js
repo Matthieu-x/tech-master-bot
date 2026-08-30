@@ -1,18 +1,3 @@
-/**
- * plugins/descargas-deezer.js
- * -------------------------------------------------------
- * Busca en Deezer y muestra hasta 5 resultados en una LISTA
- * INTERACTIVA (soportada por @itsliaaa/baileys). El usuario
- * elige uno tocándolo, y recién ahí se descarga y se cobra.
- *
- *   - Cobra MASTERCOINS 🪙💱 solo al confirmar una descarga
- *   - Cooldown por usuario para no saturar la API
- *   - Reintenta la descarga una vez si falla la primera
- *   - Muestra duración de la canción cuando la API la da
- *   - La lista expira sola a los 3 minutos sin usarse
- * -------------------------------------------------------
- */
-
 const crypto = require('crypto')
 const dfail = require('../lib/dfail')
 const { evogbApiKey } = require('../settings')
@@ -25,10 +10,10 @@ const COSTO_MASTERCOINS = 5
 const COOLDOWN_MS = 15_000
 const INTENTOS_DESCARGA = 2
 const MAX_RESULTADOS = 5
-const TTL_BUSQUEDA_MS = 3 * 60 * 1000 // la lista deja de servir a los 3 min
+const TTL_BUSQUEDA_MS = 3 * 60 * 1000
 
-const ultimoUso = new Map() // cooldown por número
-const busquedasPendientes = new Map() // searchId -> { numero, chat, resultados, creada }
+const ultimoUso = new Map()
+const busquedasPendientes = new Map()
 
 function limpiarBusquedasVencidas() {
   const ahora = Date.now()
@@ -88,17 +73,19 @@ async function descargarConReintentos(url) {
   throw ultimoError
 }
 
-function formatearDuracion(segundos) {
-  const s = Number(segundos)
+function formatearDuracion(duracion) {
+  if (!duracion) return null
+  if (typeof duracion === 'string' && duracion.includes(':')) return duracion
+
+  const s = Number(duracion)
   if (!s || isNaN(s)) return null
   const min = Math.floor(s / 60)
   const seg = Math.floor(s % 60).toString().padStart(2, '0')
   return `${min}:${seg}`
 }
 
-/** Descarga y envía el resultado elegido; cobra MASTERCOINS solo si todo sale bien. */
 async function descargarYEnviar(m, conn, resultado) {
-  const downloadParams = new URLSearchParams({ url: resultado.url, apikey: evogbApiKey })
+  const downloadParams = new URLSearchParams({ url: resultado.url, key: evogbApiKey })
   const downloadData = await fetchJson(`${API_BASE}/dl/deezer?${downloadParams}`)
   const audioUrl = downloadData.data?.dl
   if (!audioUrl) throw new Error('La API no devolvió un enlace de audio.')
@@ -164,7 +151,7 @@ let handler = async (m, { conn, text }) => {
     ultimoUso.set(numero, ahora)
     limpiarBusquedasVencidas()
 
-    const searchParams = new URLSearchParams({ q: busqueda, apikey: evogbApiKey })
+    const searchParams = new URLSearchParams({ query: busqueda, limit: String(MAX_RESULTADOS), key: evogbApiKey })
     const searchData = await fetchJson(`${API_BASE}/search/deezer?${searchParams}`)
     const resultados = (Array.isArray(searchData.data) ? searchData.data : []).filter(r => r?.url).slice(0, MAX_RESULTADOS)
 
@@ -202,10 +189,6 @@ let handler = async (m, { conn, text }) => {
   }
 }
 
-/**
- * Hook que corre en TODOS los mensajes entrantes (ver handler.js).
- * Detecta cuando alguien toca una opción de la lista de resultados.
- */
 handler.all = async (m, { conn }) => {
   const selectedRowId = m.raw.message?.listResponseMessage?.singleSelectReply?.selectedRowId
   if (!selectedRowId || !selectedRowId.startsWith('deezer|')) return
@@ -217,17 +200,15 @@ handler.all = async (m, { conn }) => {
     return conn.sendMessage(m.chat, { text: dfail('Esta lista ya expiró, busca la canción de nuevo.') }, { quoted: m.raw })
   }
 
-  // Solo quien hizo la búsqueda puede elegir de su propia lista
   if (numeroDeSender(m) !== busquedaGuardada.numero) return
 
-  busquedasPendientes.delete(searchId) // uso único, evita doble descarga/cobro
+  busquedasPendientes.delete(searchId)
 
   const resultado = busquedaGuardada.resultados[Number(indiceTexto)]
   if (!resultado) {
     return conn.sendMessage(m.chat, { text: dfail('Esa opción ya no es válida.') }, { quoted: m.raw })
   }
 
-  // Revalidamos saldo por si pasó tiempo entre la búsqueda y la elección
   const usuario = obtenerUsuario(m)
   if ((usuario?.mastercoins || 0) < COSTO_MASTERCOINS) {
     return conn.sendMessage(
