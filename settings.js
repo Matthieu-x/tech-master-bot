@@ -37,7 +37,7 @@ global.stickerPack = {
   autor: 'Tech Master Bot',
 }
 
-global.evogbApiKey = process.env.EVOGB_API_KEY || 'evogb-SNjiEiMu'
+global.evogbApiKey = 'evogb-SNjiEiMu'
 
 module.exports = {
   botName: global.botName,
