@@ -12,18 +12,40 @@ async function fetchJson(url) {
     const response = await fetch(url, {
       signal: controller.signal,
       headers: {
-        'User-Agent': 'Tech-Master-Bot'
+        'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/131.0.0.0 Mobile Safari/537.36',
+        'Accept': 'application/json',
+        'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8'
       }
     })
 
+    const body = await response.text()
+
     if (!response.ok) {
-      throw new Error(`La API respondió con HTTP ${response.status}.`)
+      console.error('Delirius YTS HTTP:', response.status)
+      console.error('Delirius YTS respuesta:', body.slice(0, 2000))
+
+      if (response.status === 451) {
+        throw new Error(
+          'Delirius rechazó la solicitud (HTTP 451). ' +
+          'La API está bloqueando temporalmente esta petición.'
+        )
+      }
+
+      throw new Error(
+        `La API respondió con HTTP ${response.status}.`
+      )
     }
 
-    const data = await response.json()
+    let data
+
+    try {
+      data = JSON.parse(body)
+    } catch {
+      throw new Error('La API devolvió una respuesta JSON inválida.')
+    }
 
     if (!Array.isArray(data)) {
-      throw new Error('La API devolvió una respuesta inválida.')
+      throw new Error('La API devolvió un formato inesperado.')
     }
 
     return data
@@ -35,7 +57,9 @@ async function fetchJson(url) {
 function formatearVistas(vistas) {
   const numero = Number(vistas)
 
-  if (!Number.isFinite(numero)) return 'Desconocidas'
+  if (!Number.isFinite(numero)) {
+    return 'Desconocidas'
+  }
 
   if (numero >= 1_000_000) {
     return `${(numero / 1_000_000).toFixed(1)} M`
@@ -46,6 +70,14 @@ function formatearVistas(vistas) {
   }
 
   return String(numero)
+}
+
+function limpiarTexto(texto, max = 150) {
+  return String(texto || '')
+    .replace(/\r?\n/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, max)
 }
 
 let handler = async (m, { conn, text, usedPrefix }) => {
@@ -78,25 +110,42 @@ let handler = async (m, { conn, text, usedPrefix }) => {
     const consulta = encodeURIComponent(query)
     const url = `${API_URL}?q=${consulta}`
 
+    console.log(`YTS: buscando "${query}"`)
+    console.log(`YTS URL: ${url}`)
+
     const resultados = await fetchJson(url)
 
     const videos = resultados
-      .filter(video => video && video.type === 'video' && video.videoId)
+      .filter(video =>
+        video &&
+        video.type === 'video' &&
+        video.videoId
+      )
       .slice(0, MAX_RESULTADOS)
 
     if (!videos.length) {
       return conn.sendMessage(
         m.chat,
         {
-          text: dfail(`No encontré resultados para: ${query}`)
+          text: dfail(
+            `No encontré resultados para:\n> ${query}`
+          )
         },
         { quoted: m.raw }
       )
     }
 
     const lineas = videos.map((video, index) => {
-      const titulo = video.title || 'Sin título'
-      const autor = video.author?.name || 'Desconocido'
+      const titulo = limpiarTexto(
+        video.title || 'Sin título',
+        120
+      )
+
+      const autor = limpiarTexto(
+        video.author?.name || 'Desconocido',
+        60
+      )
+
       const duracion =
         video.timestamp ||
         video.duration?.timestamp ||
@@ -114,9 +163,13 @@ let handler = async (m, { conn, text, usedPrefix }) => {
     const mensaje =
       `╭━━━〔 🔎 YOUTUBE SEARCH 〕━━━╮\n` +
       `┃\n` +
-      `┃ 🔍 *${query}*\n` +
+      `┃ 🔍 *${limpiarTexto(query, 100)}*\n` +
       `┃\n` +
-      `${lineas.map(linea => `┃ ${linea.replace(/\n/g, '\n┃ ')}`).join('\n┃\n')}\n` +
+      `${lineas
+        .map(linea =>
+          `┃ ${linea.replace(/\n/g, '\n┃ ')}`
+        )
+        .join('\n┃\n')}\n` +
       `┃\n` +
       `┃ Responde con un número del *1 al ${videos.length}*.\n` +
       `╰━━━━━━━━━━━━━━━━━━━━━━━━━━╯`
@@ -132,16 +185,20 @@ let handler = async (m, { conn, text, usedPrefix }) => {
   } catch (error) {
     console.error('Error en YTS:', error)
 
-    const mensaje =
-      error.name === 'AbortError'
-        ? 'La API tardó demasiado en responder.'
-        : error.message
+    let mensaje
+
+    if (error.name === 'AbortError') {
+      mensaje = 'La API tardó demasiado en responder.'
+    } else {
+      mensaje = error.message || 'Error desconocido.'
+    }
 
     await conn.sendMessage(
       m.chat,
       {
         text: dfail(
-          `No se pudo realizar la búsqueda de YouTube:\n> ${mensaje}`
+          `No se pudo realizar la búsqueda de YouTube:\n` +
+          `> ${mensaje}`
         )
       },
       { quoted: m.raw }
@@ -149,8 +206,18 @@ let handler = async (m, { conn, text, usedPrefix }) => {
   }
 }
 
-handler.help = ['yts <búsqueda>']
+handler.help = [
+  'yts <búsqueda>',
+  'ytsearch <búsqueda>',
+  'youtube <búsqueda>'
+]
+
 handler.tags = ['downloader']
-handler.command = ['yts', 'ytsearch', 'youtube']
+
+handler.command = [
+  'yts',
+  'ytsearch',
+  'youtube'
+]
 
 module.exports = handler
