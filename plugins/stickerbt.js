@@ -12,9 +12,9 @@ function extraerLista(json) {
   return []
 }
 
-// Intenta ubicar el link/id de descarga de un paquete de stickers
-function idDePaquete(item) {
-  return item?.packId || item?.id || item?.url || item?.link || null
+// Intenta ubicar la url del pack de sticker.ly en un resultado de búsqueda
+function urlDePaquete(item) {
+  return item?.url || item?.link || item?.share_url || item?.packUrl || null
 }
 
 let handler = async (m, { conn, command, args, usedPrefix }) => {
@@ -30,14 +30,14 @@ let handler = async (m, { conn, command, args, usedPrefix }) => {
           {
             text: dfail(
               `Escribe algo para buscar packs de stickers.\n` +
-              `Ejemplo: ${prefijo}${tipo} gato`
+              `Ejemplo: ${prefijo}${tipo} my melody`
             ),
           },
           { quoted: m.raw }
         )
       }
 
-      const respuesta = await fetch(`${SEARCH_URL}?q=${encodeURIComponent(query)}`)
+      const respuesta = await fetch(`${SEARCH_URL}?query=${encodeURIComponent(query)}`)
       if (!respuesta.ok) throw new Error(`La API respondió con estado ${respuesta.status}`)
 
       const json = await respuesta.json()
@@ -52,8 +52,8 @@ let handler = async (m, { conn, command, args, usedPrefix }) => {
         .map((item, i) => {
           const nombre = item?.name || item?.title || `Pack ${i + 1}`
           const autor = item?.author || item?.artist || 'desconocido'
-          const id = idDePaquete(item)
-          return `${i + 1}. *${nombre}* — por ${autor}\n   ID: ${id}`
+          const url = urlDePaquete(item)
+          return `${i + 1}. *${nombre}* — por ${autor}\n   URL: ${url}`
         })
         .join('\n\n')
 
@@ -62,7 +62,7 @@ let handler = async (m, { conn, command, args, usedPrefix }) => {
         {
           text:
             `🔎 Resultados para "${query}":\n\n${texto}\n\n` +
-            `Usa ${prefijo}stickerdl <ID> para descargar un pack.`,
+            `Usa ${prefijo}stickerdl <URL> para descargar un pack.`,
         },
         { quoted: m.raw }
       )
@@ -74,22 +74,22 @@ let handler = async (m, { conn, command, args, usedPrefix }) => {
           m.chat,
           {
             text: dfail(
-              `Indica el ID del pack a descargar.\n` +
-              `Ejemplo: ${prefijo}${tipo} <ID>`
+              `Indica la URL del pack de sticker.ly a descargar.\n` +
+              `Ejemplo: ${prefijo}${tipo} https://sticker.ly/s/MPTYYK`
             ),
           },
           { quoted: m.raw }
         )
       }
 
-      const respuesta = await fetch(`${DOWNLOAD_URL}?id=${encodeURIComponent(query)}`)
+      const respuesta = await fetch(`${DOWNLOAD_URL}?url=${encodeURIComponent(query)}`)
       if (!respuesta.ok) throw new Error(`La API respondió con estado ${respuesta.status}`)
 
       const json = await respuesta.json()
       const stickers = extraerLista(json?.data?.stickers || json?.stickers || json)
 
       if (!stickers.length) {
-        throw new Error(`No se pudieron obtener los stickers del pack "${query}"`)
+        throw new Error(`No se pudieron obtener los stickers de "${query}"`)
       }
 
       await conn.sendMessage(
@@ -119,7 +119,7 @@ let handler = async (m, { conn, command, args, usedPrefix }) => {
   }
 }
 
-handler.help = ['stickerly <búsqueda>', 'stickerdl <id>']
+handler.help = ['stickerly <búsqueda>', 'stickerdl <url>']
 handler.tags = ['sticker']
 handler.command = ['stickerly', 'sticker', 'stickerdl']
 
