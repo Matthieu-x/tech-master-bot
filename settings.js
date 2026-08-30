@@ -16,7 +16,7 @@ global.prefix = /^[#!./]/
 // Owners del bot -> pueden usar comandos exclusivos (ej: savefile).
 // Formato: [ 'numero_sin_+_ni_espacios', 'Nombre' ]
 global.owner = [
-  ['5049730537', 'Matthieu'],
+  ['584223342535', 'Matthieu'],
   ['51910227479', 'AmilcarGit'],
   ['542645746772', 'Damian'],
   ['5493875132593', 'Benja'],
