@@ -29,8 +29,6 @@ function loadPlugins() {
 async function handler(conn, m) {
   const plugins = loadPlugins()
 
-  // 1) Hooks "all": corren en TODOS los mensajes, tengan o no comando
-  //    (útil para anti-link, contadores, etc.)
   for (const plugin of plugins) {
     if (typeof plugin.all === 'function') {
       try {
@@ -43,35 +41,28 @@ async function handler(conn, m) {
 
   if (!m.text) return
 
-  // 2) ¿El mensaje empieza con un prefijo válido?
   const usedPrefix = (m.text.match(prefix) || [])[0]
   if (!usedPrefix) return
 
-  // 3) Separamos comando y argumentos
-  //    Ej: "#saludo Matthieu"  ->  command="saludo"  args=["Matthieu"]
   const sinPrefijo = m.text.slice(usedPrefix.length).trim()
   const [command, ...args] = sinPrefijo.split(/\s+/)
   const text = sinPrefijo.slice(command.length).trim()
 
   if (!command) return
 
-  // 4) Buscamos un plugin cuyo handler.command incluya este comando
-  const plugin = plugins.find(
-    p => Array.isArray(p.command) && p.command.includes(command.toLowerCase())
-  )
+  const plugin = plugins.find((p) => {
+    if (Array.isArray(p.command)) return p.command.includes(command.toLowerCase())
+    if (p.command instanceof RegExp) return p.command.test(command.toLowerCase())
+    return false
+  })
 
-  if (!plugin) return // no existe el comando, simplemente se ignora
+  if (!plugin) return
 
-  // 5) Si el grupo tiene el bot apagado (botOff), ignoramos todo excepto
-  //    el comando "bot" (para poder reactivarlo) y los comandos de owner
-  //    (por si el owner necesita usar algo aunque el grupo esté "apagado").
   if (m.isGroup && !plugin.owner && plugin.command[0] !== 'bot') {
     const configGrupo = obtenerGrupo(m.chat)
     if (configGrupo.botOff) return
   }
 
-  // 6) Si el comando requiere estar registrado (todos, salvo que el plugin
-  //    ponga handler.registro = false), validamos con .reg primero.
   const requiereRegistro = plugin.registro !== false
   if (requiereRegistro && !estaRegistrado(m)) {
     return conn.sendMessage(
@@ -81,11 +72,7 @@ async function handler(conn, m) {
     )
   }
 
-  // 7) Si el plugin es solo para owners, validamos
   if (plugin.owner) {
-    // Usamos senderNumero (número de teléfono real) en vez de sender,
-    // porque sender puede ser un @lid en grupos con el sistema nuevo de
-    // WhatsApp, y ahí nunca coincidiría con el número puesto en settings.js.
     const numeroSender = (m.senderNumero || m.sender).split('@')[0].split(':')[0].replace(/[^0-9]/g, '')
     const numerosOwner = owner.map(o => o[0].replace(/[^0-9]/g, ''))
     if (!numerosOwner.includes(numeroSender)) {
@@ -93,7 +80,6 @@ async function handler(conn, m) {
     }
   }
 
-  // 8) Ejecutamos el plugin
   try {
     await plugin(m, { conn, args, text, command, usedPrefix })
   } catch (e) {
