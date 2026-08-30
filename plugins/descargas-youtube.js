@@ -103,6 +103,6 @@ let handler = async (m, { conn, text, usedPrefix }) => {
 handler.help = ['ytv <url>']
 handler.tags = ['downloader']
 handler.command = ['ytv', 'ytvideo']
-handler.registro = false
+handler.registro = true
 
 module.exports = handler
