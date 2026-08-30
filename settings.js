@@ -29,9 +29,16 @@ global.creators = [
   { nombre: '', rol: '' }, // <-- vacante, se agrega después
 ]
 
+// Texto que aparece debajo del sticker al mantenerlo presionado en WhatsApp.
+global.stickerPack = {
+  nombre: global.botName,
+  autor: 'Tech Master Bot',
+}
+
 module.exports = {
   botName: global.botName,
   prefix: global.prefix,
   owner: global.owner,
   creators: global.creators,
+  stickerPack: global.stickerPack,
 }
