@@ -25,6 +25,7 @@ const readline = require('readline')
 const handler = require('./handler')
 const { numeroBot } = require('./settings')
 const { iniciarAutoUpdate } = require('./lib/autoupdate')
+const { mostrarBannerInicio, mostrarConexionExitosa } = require('./lib/banner')
 
 // Helper para pedir el número por consola (solo se usa si no llenaste
 // global.numeroBot en settings.js ni pasaste el número como argumento)
@@ -127,7 +128,7 @@ async function iniciar() {
       console.log('Conexión cerrada.', debeReconectar ? 'Reconectando...' : 'Sesión cerrada, escanea el QR de nuevo.')
       if (debeReconectar) iniciar()
     } else if (connection === 'open') {
-      console.log(`✅ ${global.botName} conectado correctamente.`)
+      mostrarConexionExitosa(global.botName)
     }
   })
 
@@ -187,5 +188,6 @@ function serializarMensaje(msg) {
   }
 }
 
+mostrarBannerInicio(global.botName, '1.0.0')
 iniciar()
 iniciarAutoUpdate(5) // revisa el repo cada 5 minutos y se auto-actualiza si hay cambios
