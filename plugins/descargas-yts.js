@@ -1,13 +1,14 @@
 const dfail = require('../lib/dfail')
 
-const API_URL = 'https://delirius-api-oficial.vercel.app/api/ytsearch'
-const TIMEOUT_MS = 20_000
+const API_URL = 'https://apiyosoyyo-ofc.onrender.com/api/youtube'
+const API_KEY = 'yosoyyo_sk_qin39ynp'
+const TIMEOUT_MS = 30_000
 
 async function buscarYouTube(consulta) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
   try {
-    const params = new URLSearchParams({ q: consulta })
+    const params = new URLSearchParams({ q: consulta, apiKey: API_KEY })
     const response = await fetch(`${API_URL}?${params}`, { signal: controller.signal })
     const texto = await response.text()
     let datos
@@ -17,21 +18,12 @@ async function buscarYouTube(consulta) {
       throw new Error('La API devolvió una respuesta inválida.')
     }
     if (!response.ok) throw new Error(`La API respondió con HTTP ${response.status}.`)
-    if (!Array.isArray(datos)) throw new Error('La API no devolvió una lista de resultados.')
-    return datos
+    if (datos.status !== true) throw new Error(datos.message || 'La API no encontró el video.')
+    if (!datos.result?.url) throw new Error('La API no devolvió un enlace de YouTube.')
+    return datos.result
   } finally {
     clearTimeout(timer)
   }
-}
-
-function formatearVistas(vistas) {
-  const numero = Number(vistas)
-  return Number.isFinite(numero) && numero > 0 ? numero.toLocaleString('es-ES') : 'No disponible'
-}
-
-function formatearResultado(video, indice) {
-  const autor = typeof video.author === 'object' ? video.author?.name : video.author
-  return `${indice}. *${video.title || 'Sin título'}*\n> Duración: ${video.timestamp || video.duration?.timestamp || 'No disponible'}\n> Vistas: ${formatearVistas(video.views)}\n> Canal: ${autor || 'No disponible'}\n> ${video.url || `https://www.youtube.com/watch?v=${video.videoId}`}`
 }
 
 let handler = async (m, { conn, text }) => {
@@ -39,22 +31,19 @@ let handler = async (m, { conn, text }) => {
   if (!consulta) {
     return conn.sendMessage(
       m.chat,
-      { text: dfail('Uso: ytsearch nombre del video\nEjemplo: ytsearch música electrónica') },
+      { text: dfail('Uso: ytsearch nombre del video\nEjemplo: ytsearch gura') },
       { quoted: m.raw }
     )
   }
 
   try {
     await conn.sendMessage(m.chat, { text: 'ꕥ Buscando en YouTube...' }, { quoted: m.raw })
-    const resultados = await buscarYouTube(consulta)
-    if (!resultados.length) {
-      return conn.sendMessage(m.chat, { text: dfail('No encontré videos para esa búsqueda.') }, { quoted: m.raw })
-    }
-
-    const lista = resultados.slice(0, 5).map(formatearResultado).join('\n\n')
+    const resultado = await buscarYouTube(consulta)
+    const titulo = resultado.title || 'Video encontrado'
+    const enlace = resultado.url
     await conn.sendMessage(
       m.chat,
-      { text: `ꕥ *Resultados para:* ${consulta}\n\n${lista}` },
+      { text: `ꕥ *${titulo}*\n\n> ${enlace}` },
       { quoted: m.raw }
     )
   } catch (error) {
