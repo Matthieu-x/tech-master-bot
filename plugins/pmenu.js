@@ -73,7 +73,7 @@ let handler = async (m, { conn, usedPrefix }) => {
   const texto =
     `ꕥ *_${botName}_*\n` +
     `✰ *_Hola @${numeroMencion}, bienvenido_*\n\n` +
-    `✐ *_Usuarios registrados:_* ${totalRegistrados}\n\n` +
+    `> ✐ *_Usuarios registrados:_* ${totalRegistrados}\n\n` +
     `〄 *_Comandos disponibles_*${comandos}\n` +
     `> Ejemplo: ${prefijo}ping`
 
