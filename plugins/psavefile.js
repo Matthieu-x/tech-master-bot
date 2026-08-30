@@ -30,7 +30,7 @@ let handler = async (m, { conn, text, args }) => {
   if (!text || !text.trim()) {
     return conn.sendMessage(
       m.chat,
-      { text: dfail(`Uso:\n> savefile nombre\n> (pega el código debajo del nombre)`) },
+      { text: dfail(`Uso:\n> savefile nombre\n> *_pega el código debajo del nombre_*`) },
       { quoted: m.raw }
     )
   }
@@ -48,6 +48,7 @@ let handler = async (m, { conn, text, args }) => {
   }
 
   const filePath = path.join(__dirname, `${nombre}.js`)
+  const yaExistia = fs.existsSync(filePath)
 
   // Validación básica de sintaxis antes de guardar, para no tumbar el bot
   try {
@@ -64,7 +65,14 @@ let handler = async (m, { conn, text, args }) => {
 
     await conn.sendMessage(
       m.chat,
-      { text: `ꕥ *Plugin guardado*\n> Nombre: ${nombre}.js\n> Ruta: /plugins/${nombre}.js\n> Se carga solo, sin reiniciar el bot.` },
+      {
+        text:
+          `ꕥ *Plugin guardado*\n` +
+          `> Nombre: ${nombre}.js\n` +
+          `> Ruta: /plugins/${nombre}.js\n` +
+          `> ${yaExistia ? 'Ya existía, se reemplazó ♻️' : 'Es nuevo, se creó 🆕'}\n` +
+          `> Se carga solo, sin reiniciar el bot.`,
+      },
       { quoted: m.raw }
     )
   } catch (e) {
