@@ -1,42 +1,53 @@
-/**
- * plugins/pmenu.js
- * -------------------------------------------------------
- * Muestra el menú del bot y los créditos. También sirve
- * de ejemplo de cómo mencionar de verdad al usuario:
- * usando su jid real en la propiedad "mentions".
- * -------------------------------------------------------
- */
+const { botName, creators, prefijo } = require('../settings')
 
-const { botName, creators } = require('../settings')
+const IMAGEN_MENU = 'https://files.catbox.moe/TU_IMAGEN.jpg'
 
 let handler = async (m, { conn }) => {
-  // Lista de créditos, saltando la vacante vacía
   const listaCreadores = creators
     .filter(c => c.nombre)
-    .map(c => `> ${c.nombre} (${c.rol})`)
+    .map(c => `> ✨ ${c.nombre} — ${c.rol}`)
     .join('\n')
 
-  // @numero se arma a partir del jid real del sender (m.sender)
   const numeroMencion = m.sender.split('@')[0]
 
   const texto =
-    `ꕥ *${botName}*\n\n` +
-    `Hola @${numeroMencion}, estos son los comandos disponibles:\n\n` +
-    `> ${'{'}prefijo{'}'}ping - probar si el bot responde\n` +
-    `> ${'{'}prefijo{'}'}menu - este menú\n\n` +
-    `Creadores:\n${listaCreadores}`
+    `╭━━━━━━━━━━━━━━━━━━━━━━━━━━━━╮\n` +
+    `│   🌸 *${botName}* 🌸   │\n` +
+    `╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n` +
+    `👋 ¡Hola @${numeroMencion}! Aquí están los comandos disponibles:\n\n` +
+    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+    `📌 *Información*\n` +
+    `> ${prefijo}ping — Comprobar si estoy activo\n` +
+    `> ${prefijo}menu — Mostrar este menú\n` +
+    `> ${prefijo}infobot — Información del bot\n\n` +
+    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+    `👨‍💻 *Creadores del proyecto*\n` +
+    `${listaCreadores}\n\n` +
+    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+    `💡 *Consejo:* Escribe ${prefijo}help para ver todos los comandos\n` +
+    `> ${botName} — Creado con 💚 por el equipo Tech Master`
 
-  // "mentions" es lo que hace que la @mención sea real y clickeable en WhatsApp,
-  // no solo texto plano con una @.
-  await conn.sendMessage(
-    m.chat,
-    { text: texto, mentions: [m.sender] },
-    { quoted: m.raw }
-  )
+  try {
+    await conn.sendMessage(
+      m.chat,
+      {
+        image: { url: IMAGEN_MENU },
+        caption: texto,
+        mentions: [m.sender]
+      },
+      { quoted: m.raw }
+    )
+  } catch (err) {
+    await conn.sendMessage(
+      m.chat,
+      { text: texto, mentions: [m.sender] },
+      { quoted: m.raw }
+    )
+  }
 }
 
 handler.help = ['menu']
 handler.tags = ['general']
-handler.command = ['menu', 'help']
+handler.command = ['menu', 'help', 'comandos']
 
 module.exports = handler
