@@ -24,6 +24,7 @@ const path = require('path')
 const readline = require('readline')
 const handler = require('./handler')
 const { numeroBot } = require('./settings')
+const { iniciarAutoUpdate } = require('./lib/autoupdate')
 
 // Helper para pedir el número por consola (solo se usa si no llenaste
 // global.numeroBot en settings.js ni pasaste el número como argumento)
@@ -176,3 +177,4 @@ function serializarMensaje(msg) {
 }
 
 iniciar()
+iniciarAutoUpdate(5) // revisa el repo cada 5 minutos y se auto-actualiza si hay cambios
