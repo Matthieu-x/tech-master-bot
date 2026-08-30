@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@whiskeysockets/baileys": "npm:@itsliaaa/baileys@latest",
+    "node-webpmux": "^3.1.0",
     "pino": "^8.0.0",
     "qrcode-terminal": "^0.12.0",
     "sharp": "^0.33.5"
