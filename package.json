@@ -6,6 +6,9 @@
   "scripts": {
     "start": "node index.js"
   },
+  "overrides": {
+    "libsignal": "npm:libsignal-node@latest"
+  },
   "dependencies": {
     "@whiskeysockets/baileys": "npm:@itsliaaa/baileys@latest",
     "pino": "^8.0.0",
