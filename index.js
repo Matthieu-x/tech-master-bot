@@ -155,4 +155,4 @@ mostrarBannerInicio(global.botName, '1.0.0')
 iniciar()
 
 iniciarWebhook({ puerto: autoUpdatePuerto, secreto: autoUpdateSecreto, rama: autoUpdateRama })
-iniciarAutoUpdate(30)
+iniciarAutoUpdate(10)
