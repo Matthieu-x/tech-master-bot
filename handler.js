@@ -13,7 +13,7 @@ const fs = require('fs')
 const path = require('path')
 const dfail = require('./lib/dfail')
 const { prefix, owner } = require('./settings')
-const { estaRegistrado } = require('./lib/db')
+const { estaRegistrado, obtenerGrupo } = require('./lib/db')
 
 const pluginsDir = path.join(__dirname, 'plugins')
 
@@ -84,7 +84,15 @@ async function handler(conn, m) {
 
   if (!plugin) return // no existe el comando, simplemente se ignora
 
-  // 5) Si el comando requiere estar registrado (todos, salvo que el plugin
+  // 5) Si el grupo tiene el bot apagado (botOff), ignoramos todo excepto
+  //    el comando "bot" (para poder reactivarlo) y los comandos de owner
+  //    (por si el owner necesita usar algo aunque el grupo esté "apagado").
+  if (m.isGroup && !plugin.owner && plugin.command[0] !== 'bot') {
+    const configGrupo = obtenerGrupo(m.chat)
+    if (configGrupo.botOff) return
+  }
+
+  // 6) Si el comando requiere estar registrado (todos, salvo que el plugin
   //    ponga handler.registro = false), validamos con .reg primero.
   const requiereRegistro = plugin.registro !== false
   if (requiereRegistro && !estaRegistrado(m)) {
@@ -95,7 +103,7 @@ async function handler(conn, m) {
     )
   }
 
-  // 6) Si el plugin es solo para owners, validamos
+  // 7) Si el plugin es solo para owners, validamos
   if (plugin.owner) {
     // Usamos senderNumero (número de teléfono real) en vez de sender,
     // porque sender puede ser un @lid en grupos con el sistema nuevo de
@@ -107,7 +115,7 @@ async function handler(conn, m) {
     }
   }
 
-  // 7) Ejecutamos el plugin
+  // 8) Ejecutamos el plugin
   try {
     await plugin(m, { conn, args, text, command, usedPrefix })
   } catch (e) {
