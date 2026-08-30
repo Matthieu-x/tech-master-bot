@@ -19,6 +19,7 @@ global.owner = [
   ['5049730537', 'Matthieu'],
   ['51910227479', 'AmilcarGit'],
   ['542645746772', 'Damian'],
+  ['5493875132593', 'Benja'],
 ]
 
 // Créditos / creadores del proyecto (para el menú, about, etc.)
