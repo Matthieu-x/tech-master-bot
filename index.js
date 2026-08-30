@@ -14,20 +14,16 @@ const {
   default: makeWASocket,
   useMultiFileAuthState,
   DisconnectReason,
-  fetchLatestBaileysVersion,
-} = require('baileys')
+} = require('@whiskeysockets/baileys')
 
 const pino = require('pino')
 const path = require('path')
 const readline = require('readline')
 const handler = require('./handler')
+const { numeroBot } = require('./settings')
 
-// Código de vinculación personalizado (8 caracteres, va sin guion, la
-// librería lo formatea al mostrarlo). Cámbialo aquí si quieres otro.
-const CODIGO_PERSONALIZADO = 'TECHBOTS'
-
-// Helper para pedir el número por consola (solo se pide la primera vez,
-// mientras no exista una sesión guardada en /session)
+// Helper para pedir el número por consola (solo se usa si no llenaste
+// global.numeroBot en settings.js ni pasaste el número como argumento)
 function preguntar(texto) {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
   return new Promise((resolve) => rl.question(texto, (respuesta) => {
@@ -37,26 +33,47 @@ function preguntar(texto) {
 }
 
 async function iniciar() {
+  console.log('ꕥ Cargando sesión...')
+
   // Guarda las credenciales de la sesión en la carpeta /session
   const { state, saveCreds } = await useMultiFileAuthState(path.join(__dirname, 'session'))
-  const { version } = await fetchLatestBaileysVersion()
+
+  console.log('ꕥ Sesión cargada, abriendo conexión...')
 
   // Solo se pide vincular por código si todavía no hay sesión registrada
   const usarCodigoVinculacion = !state.creds.registered
 
+  // OJO: no llamamos fetchLatestBaileysVersion() aquí. ultra-baileys ya
+  // trae una versión de WA "fijada" por defecto (lo dice su propio banner
+  // al arrancar). Pedirla nosotros mismos hace una petición HTTP externa
+  // que en varios hostings (HidenCloud incluido) se queda colgada sin
+  // avisar, y por eso el bot parecía no ejecutar nada.
   const conn = makeWASocket({
-    version,
     auth: state,
     printQRInTerminal: false, // desactivado: usamos código de vinculación, no QR
     logger: pino({ level: 'silent' }), // silencia los logs internos de baileys
     browser: [global.botName || 'Tech Master Bot', 'Chrome', '1.0.0'],
   })
 
+  console.log('ꕥ Socket creado.')
+
   if (usarCodigoVinculacion) {
-    const numero = await preguntar('Ingresa el número de WhatsApp del bot (con código de país, sin +): ')
-    // requestPairingCode(numero, códigoPersonalizado) -> WhatsApp muestra
-    // este código en el celular real para confirmar la vinculación.
-    const codigo = await conn.requestPairingCode(numero.replace(/[^0-9]/g, ''), CODIGO_PERSONALIZADO)
+    // Orden de prioridad para el número:
+    // 1) argumento al arrancar -> node index.js 521XXXXXXXXXX
+    // 2) global.numeroBot en settings.js (si lo llenaste)
+    // 3) preguntarlo por consola (puede no funcionar en paneles sin stdin real)
+    const numeroArgumento = process.argv[2]
+    const numero = (numeroArgumento && numeroArgumento.trim())
+      ? numeroArgumento.trim()
+      : (numeroBot && numeroBot.trim())
+        ? numeroBot.trim()
+        : await preguntar('Ingresa el número de WhatsApp del bot (con código de país, sin +): ')
+
+    console.log(`ꕥ Solicitando código de vinculación para ${numero}...`)
+
+    // requestPairingCode(numero) -> WhatsApp genera un código aleatorio
+    // (sin personalizar) y lo muestra en el celular real para confirmar.
+    const codigo = await conn.requestPairingCode(numero.replace(/[^0-9]/g, ''))
     console.log(`ꕥ Código de vinculación: ${codigo}`)
     console.log('> Ve a WhatsApp > Dispositivos vinculados > Vincular con número de teléfono, e ingresa este código.')
   }
