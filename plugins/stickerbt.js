@@ -12,9 +12,12 @@ function extraerLista(json) {
   return []
 }
 
-// Intenta ubicar la url del pack de sticker.ly en un resultado de búsqueda
 function urlDePaquete(item) {
   return item?.url || item?.link || item?.share_url || item?.packUrl || null
+}
+
+function esUrlStickerly(texto) {
+  return /^https?:\/\/(www\.)?sticker\.ly\//i.test(texto)
 }
 
 let handler = async (m, { conn, command, args, usedPrefix }) => {
@@ -22,92 +25,61 @@ let handler = async (m, { conn, command, args, usedPrefix }) => {
   const tipo = command.toLowerCase()
   const query = args.join(' ').trim()
 
+  if (!query) {
+    return conn.sendMessage(
+      m.chat,
+      {
+        text: dfail(
+          `Escribe una búsqueda o pega el link de un pack de sticker.ly.\n` +
+          `Ejemplo: ${prefijo}${tipo} my melody\n` +
+          `Ejemplo: ${prefijo}${tipo} https://sticker.ly/s/MPTYYK`
+        ),
+      },
+      { quoted: m.raw }
+    )
+  }
+
   try {
-    if (tipo === 'stickerly' || tipo === 'sticker') {
-      if (!query) {
-        return conn.sendMessage(
-          m.chat,
-          {
-            text: dfail(
-              `Escribe algo para buscar packs de stickers.\n` +
-              `Ejemplo: ${prefijo}${tipo} my melody`
-            ),
-          },
-          { quoted: m.raw }
-        )
-      }
+    let urlPaquete = query
 
-      const respuesta = await fetch(`${SEARCH_URL}?query=${encodeURIComponent(query)}`)
-      if (!respuesta.ok) throw new Error(`La API respondió con estado ${respuesta.status}`)
+    // Si no es un link directo, primero buscamos y usamos el primer resultado
+    if (!esUrlStickerly(query)) {
+      const respBusqueda = await fetch(`${SEARCH_URL}?query=${encodeURIComponent(query)}`)
+      if (!respBusqueda.ok) throw new Error(`La búsqueda respondió con estado ${respBusqueda.status}`)
 
-      const json = await respuesta.json()
-      const lista = extraerLista(json)
+      const jsonBusqueda = await respBusqueda.json()
+      const lista = extraerLista(jsonBusqueda)
 
       if (!lista.length) {
         throw new Error(`No se encontraron packs de stickers para "${query}"`)
       }
 
-      const top = lista.slice(0, 10)
-      const texto = top
-        .map((item, i) => {
-          const nombre = item?.name || item?.title || `Pack ${i + 1}`
-          const autor = item?.author || item?.artist || 'desconocido'
-          const url = urlDePaquete(item)
-          return `${i + 1}. *${nombre}* — por ${autor}\n   URL: ${url}`
-        })
-        .join('\n\n')
-
-      return conn.sendMessage(
-        m.chat,
-        {
-          text:
-            `🔎 Resultados para "${query}":\n\n${texto}\n\n` +
-            `Usa ${prefijo}stickerdl <URL> para descargar un pack.`,
-        },
-        { quoted: m.raw }
-      )
+      urlPaquete = urlDePaquete(lista[0])
+      if (!urlPaquete) {
+        throw new Error('No se pudo obtener la URL del primer resultado')
+      }
     }
 
-    if (tipo === 'stickerdl') {
-      if (!query) {
-        return conn.sendMessage(
-          m.chat,
-          {
-            text: dfail(
-              `Indica la URL del pack de sticker.ly a descargar.\n` +
-              `Ejemplo: ${prefijo}${tipo} https://sticker.ly/s/MPTYYK`
-            ),
-          },
-          { quoted: m.raw }
-        )
-      }
+    const respDescarga = await fetch(`${DOWNLOAD_URL}?url=${encodeURIComponent(urlPaquete)}`)
+    if (!respDescarga.ok) throw new Error(`La descarga respondió con estado ${respDescarga.status}`)
 
-      const respuesta = await fetch(`${DOWNLOAD_URL}?url=${encodeURIComponent(query)}`)
-      if (!respuesta.ok) throw new Error(`La API respondió con estado ${respuesta.status}`)
+    const jsonDescarga = await respDescarga.json()
+    const stickers = extraerLista(
+      jsonDescarga?.data?.stickers || jsonDescarga?.stickers || jsonDescarga
+    )
 
-      const json = await respuesta.json()
-      const stickers = extraerLista(json?.data?.stickers || json?.stickers || json)
+    if (!stickers.length) {
+      throw new Error(`No se pudieron obtener los stickers de "${query}"`)
+    }
 
-      if (!stickers.length) {
-        throw new Error(`No se pudieron obtener los stickers de "${query}"`)
-      }
-
+    for (const st of stickers) {
+      const url = typeof st === 'string' ? st : st?.url || st?.image
+      if (!url) continue
       await conn.sendMessage(
         m.chat,
-        { text: `📦 Descargando ${stickers.length} stickers...` },
+        { sticker: { url } },
         { quoted: m.raw }
       )
-
-      for (const st of stickers) {
-        const url = typeof st === 'string' ? st : st?.url || st?.image
-        if (!url) continue
-        await conn.sendMessage(
-          m.chat,
-          { sticker: { url } },
-          { quoted: m.raw }
-        )
-      }
-      return
     }
   } catch (e) {
     console.log(`Error en "${tipo}":`, e)
@@ -119,8 +91,8 @@ let handler = async (m, { conn, command, args, usedPrefix }) => {
   }
 }
 
-handler.help = ['stickerly <búsqueda>', 'stickerdl <url>']
+handler.help = ['stickerly <búsqueda o url>']
 handler.tags = ['sticker']
-handler.command = ['stickerly', 'sticker', 'stickerdl']
+handler.command = ['stickerly', 'sticker']
 
 module.exports = handler
