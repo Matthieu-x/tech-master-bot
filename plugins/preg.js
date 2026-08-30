@@ -2,7 +2,7 @@
  * plugins/preg.js
  * -------------------------------------------------------
  * Registro obligatorio para poder usar los comandos del bot.
- * Uso: .reg Nombre.Edad   (ej: .reg Carlos.20)
+ * Uso: .reg Nombre.Edad   (ej: .reg Matthieu.20)
  * Regala un saldo inicial de MASTERCOINS 🪙💱 al registrarse.
  * -------------------------------------------------------
  */
@@ -27,7 +27,7 @@ let handler = async (m, { conn, text, usedPrefix }) => {
   if (!nombre || !edadTexto || isNaN(edad)) {
     return conn.sendMessage(
       m.chat,
-      { text: dfail(`Uso incorrecto.\n> Ejemplo: ${usedPrefix}reg Carlos.20`) },
+      { text: dfail(`Uso incorrecto.\n> Ejemplo: ${usedPrefix}reg Matthieu.20`) },
       { quoted: m.raw }
     )
   }
