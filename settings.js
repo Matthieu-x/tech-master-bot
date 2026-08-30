@@ -15,9 +15,9 @@ global.prefix = /^[#!./]/
 
 // Owners del bot -> pueden usar comandos exclusivos (ej: savefile).
 // Formato: [ 'numero_sin_+_ni_espacios', 'Nombre' ]
-// Agrega aquí el número real del bot cuando lo tengas.
 global.owner = [
-  ['51910227479', 'AmilcarGit'], // <-- reemplaza 0000000000 por tu número real
+  ['5049730537', 'Matthieu'],
+  ['51910227479', 'AmilcarGit'],
 ]
 
 // Créditos / creadores del proyecto (para el menú, about, etc.)
