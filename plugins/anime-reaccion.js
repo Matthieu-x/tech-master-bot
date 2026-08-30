@@ -86,3 +86,5 @@ handler.help = [
 ]
 handler.tags = ['reacciones']
 handler.command = new RegExp(`^(${claves.join('|')})$`, 'i')
+
+module.exports = handler
