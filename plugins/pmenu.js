@@ -44,7 +44,7 @@ function crearMenu(prefijo) {
     const comandos = grupos[categoria]
     if (!comandos.length) continue
 
-    menuComandos += `\n〄 *${categoria.toUpperCase()}*\n`
+    menuComandos += `\n〄 *_${categoria.toUpperCase()}_*\n`
     for (const { principal, alias } of comandos) {
       const listaCompleta = [principal, ...alias].map(c => prefijo + c).join(', ')
       menuComandos += `> ✐ ${listaCompleta}\n`
@@ -71,11 +71,11 @@ let handler = async (m, { conn, usedPrefix }) => {
   const totalRegistrados = Object.values(usuarios).filter(u => u?.registrado).length
 
   const texto =
-    `ꕥ *${botName}*\n` +
-    `❧ Hola @${numeroMencion}, bienvenido\n\n` +
-    `𖣔 *Usuarios registrados:* ${totalRegistrados}\n\n` +
-    `✰ *Comandos disponibles*${comandos}\n` +
-    `> ࿇ Ejemplo: ${prefijo}ping`
+    `ꕥ *_${botName}_*\n` +
+    `✰ *_Hola @${numeroMencion}, bienvenido_*\n\n` +
+    `✐ *_Usuarios registrados:_* ${totalRegistrados}\n\n` +
+    `〄 *_Comandos disponibles_*${comandos}\n` +
+    `> Ejemplo: ${prefijo}ping`
 
   try {
     await conTimeout(
