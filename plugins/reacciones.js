@@ -1,120 +1,151 @@
 /**
- * plugins/reaccion.js
+ * plugins/reacciones.js
  * -------------------------------------------------------
- * Dispara el gif correspondiente para cada reacción individual
- * (.hug, .kiss, .dance, etc.) usando la API pública de Delirius:
- * https://api.delirius.online/reactions/<tipo>
+ * Comandos de "reacciones" tipo anime (hug, kiss, slap, pat...)
+ * usando la API pública de Delirius.
  *
- * handler.command es un RegExp (no un array) a propósito:
- * tu menu.js hace `!Array.isArray(plugin.command)` y salta el
- * archivo si no es array, así que este plugin queda oculto del
- * menú aunque los comandos sigan funcionando con normalidad.
- * El comando visible ".reacciones" vive en plugins/reacciones.js
+ * Uso:
+ *   .hug @usuario        -> envía un gif de abrazo mencionando a alguien
+ *   .kiss                -> envía un gif de beso (sin mencionar a nadie)
+ *   .reacciones          -> muestra la lista de reacciones disponibles
  *
- * Hay dos tipos de reacción:
- *   - "Solo"    -> el usuario reacciona sin necesitar a nadie más
- *                  (ej: .cry, .dance, .happy)
- *   - "Pareja"  -> el usuario le hace algo a otra persona, ya sea
- *                  mencionándola (@numero) o respondiendo su mensaje
- *                  (ej: .hug @juan, respondiendo un msj con .slap)
+ * NOTA IMPORTANTE:
+ * La documentación de https://api.delirius.online/reactions se
+ * renderiza con JavaScript en el navegador, así que no pude leer
+ * desde aquí la lista "oficial" y en vivo de endpoints ni el
+ * formato exacto de la respuesta JSON. Dejé abajo el listado más
+ * común que usan las APIs de este estilo (asumiendo que cada
+ * endpoint es BASE_API/<tipo> y responde algo como
+ * { status: true, url: "https://..." }).
  *
- * No requiere API key.
+ * Antes de usar en producción:
+ *   1) Prueba un endpoint en el navegador o con curl, ej:
+ *        curl https://api.delirius.online/reactions/hug
+ *   2) Ajusta REACCIONES (agrega/quita tipos) según lo que
+ *      realmente exista.
+ *   3) Ajusta extraerUrl() si el JSON viene con otra estructura
+ *      (por ejemplo data.data.url en vez de data.url).
  * -------------------------------------------------------
  */
 
+const fetch = require('node-fetch') // si tu proyecto ya usa axios, puedes cambiarlo
 const dfail = require('../lib/dfail')
-const { REACCIONES_SOLO, REACCIONES_PAREJA } = require('../lib/reacciones-data')
 
 const BASE_API = 'https://api.delirius.online/reactions'
 
+// Lista de reacciones disponibles: comando -> { endpoint, emoji, texto de acción }
+const REACCIONES = {
+  hug:      { endpoint: 'hug',      emoji: '🤗', texto: 'abraza a' },
+  kiss:     { endpoint: 'kiss',     emoji: '😘', texto: 'besa a' },
+  pat:      { endpoint: 'pat',      emoji: '🤚', texto: 'acaricia a' },
+  slap:     { endpoint: 'slap',     emoji: '✋', texto: 'abofetea a' },
+  punch:    { endpoint: 'punch',    emoji: '👊', texto: 'golpea a' },
+  poke:     { endpoint: 'poke',     emoji: '👉', texto: 'pica a' },
+  cuddle:   { endpoint: 'cuddle',   emoji: '🥰', texto: 'se acurruca con' },
+  bite:     { endpoint: 'bite',     emoji: '😬', texto: 'muerde a' },
+  kill:     { endpoint: 'kill',     emoji: '🔪', texto: 'mata a' },
+  kick:     { endpoint: 'kick',     emoji: '🦵', texto: 'patea a' },
+  blush:    { endpoint: 'blush',    emoji: '😳', texto: 'se sonroja por' },
+  cry:      { endpoint: 'cry',      emoji: '😭', texto: 'llora con' },
+  dance:    { endpoint: 'dance',    emoji: '💃', texto: 'baila con' },
+  laugh:    { endpoint: 'laugh',    emoji: '😂', texto: 'se ríe de' },
+  smile:    { endpoint: 'smile',    emoji: '😄', texto: 'le sonríe a' },
+  wave:     { endpoint: 'wave',     emoji: '👋', texto: 'saluda a' },
+  wink:     { endpoint: 'wink',     emoji: '😉', texto: 'le guiña el ojo a' },
+  highfive: { endpoint: 'highfive', emoji: '🙌', texto: 'choca la mano con' },
+  handhold: { endpoint: 'handhold', emoji: '🤝', texto: 'toma de la mano a' },
+  tickle:   { endpoint: 'tickle',   emoji: '🤭', texto: 'hace cosquillas a' },
+}
+
 /**
- * Obtiene el JID de la persona "objetivo" de la reacción:
- * primero busca una mención (@numero), y si no hay, busca si
- * el comando fue enviado respondiendo (citando) a alguien.
+ * Intenta sacar la URL de la imagen/gif de la respuesta de la API,
+ * probando las formas más comunes en las que suelen venir estos JSON.
  */
-function obtenerObjetivo(m) {
-  const contexto = m.raw.message?.extendedTextMessage?.contextInfo
-  const mencionados = contexto?.mentionedJid
-
-  if (mencionados && mencionados.length > 0) return mencionados[0]
-  if (contexto?.participant) return contexto.participant
-
-  return null
+function extraerUrl(data) {
+  return (
+    data?.url ||
+    data?.data?.url ||
+    data?.data ||
+    data?.result ||
+    data?.result?.url ||
+    null
+  )
 }
 
-function numeroLegible(jid) {
-  return jid ? jid.split('@')[0] : null
+async function obtenerReaccion(tipo) {
+  const respuesta = await fetch(`${BASE_API}/${tipo}`)
+  if (!respuesta.ok) {
+    throw new Error(`La API respondió con estado ${respuesta.status}`)
+  }
+  const data = await respuesta.json()
+  const url = extraerUrl(data)
+  if (!url) {
+    throw new Error('No se encontró una URL de imagen/gif en la respuesta de la API')
+  }
+  return url
 }
 
-let handler = async (m, { conn, command, usedPrefix }) => {
-  const tipo = command.toLowerCase()
-  const prefijo = usedPrefix || '.'
+/**
+ * Handler para el subcomando que muestra la lista de reacciones.
+ */
+async function mostrarLista(conn, m) {
+  const lineas = Object.entries(REACCIONES).map(
+    ([comando, info]) => `${info.emoji} *.${comando}*`
+  )
 
-  const esSolo = Object.prototype.hasOwnProperty.call(REACCIONES_SOLO, tipo)
-  const info = esSolo ? REACCIONES_SOLO[tipo] : REACCIONES_PAREJA[tipo]
+  const texto =
+    '📋 *Reacciones disponibles*\n\n' +
+    lineas.join('\n') +
+    '\n\n> Uso: responde o menciona a alguien junto con el comando.\n' +
+    '> Ejemplo: *.hug @usuario*'
 
-  const remitente = m.sender
-  let objetivo = null
+  await conn.sendMessage(m.chat, { text: texto }, { quoted: m.raw })
+}
 
-  if (!esSolo) {
-    objetivo = obtenerObjetivo(m)
-    if (!objetivo) {
-      return conn.sendMessage(
-        m.chat,
-        {
-          text: dfail(
-            `Menciona a alguien o responde su mensaje para usar ${prefijo}${tipo}\n` +
-            `Ejemplo: ${prefijo}${tipo} @${numeroLegible(remitente)}`
-          ),
-        },
-        { quoted: m.raw }
-      )
-    }
+let handler = async (m, { conn, command, text, usedPrefix }) => {
+  // .reacciones / .listareacciones -> muestra el menú
+  if (command === 'reacciones' || command === 'listareacciones') {
+    return mostrarLista(conn, m)
   }
 
+  // Cualquier otro comando registrado (.hug, .kiss, etc.)
+  const reaccion = REACCIONES[command]
+  if (!reaccion) return // no debería pasar, pero por seguridad
+
   try {
-    const respuesta = await fetch(`${BASE_API}/${tipo}`)
-    if (!respuesta.ok) throw new Error(`La API respondió con estado ${respuesta.status}`)
+    const url = await obtenerReaccion(reaccion.endpoint)
 
-    const json = await respuesta.json()
-    if (!json?.status || !json?.data?.url) {
-      throw new Error('La API no devolvió un gif válido para esta reacción')
-    }
+    // Si mencionaron a alguien o el mensaje es una respuesta, arma el texto de acción
+    const mencionado =
+      m.raw.message?.extendedTextMessage?.contextInfo?.mentionedJid?.[0]
+    const autor = m.sender
+    const destino = mencionado ? `@${mencionado.split('@')[0]}` : ''
 
-    const caption = esSolo
-      ? `@${numeroLegible(remitente)} ${info.texto} ${info.emoji}`
-      : `@${numeroLegible(remitente)} ${info.texto} @${numeroLegible(objetivo)} ${info.emoji}`
-
-    const mentions = esSolo ? [remitente] : [remitente, objetivo]
+    const caption = destino
+      ? `${reaccion.emoji} @${autor.split('@')[0]} ${reaccion.texto} ${destino}`
+      : `${reaccion.emoji} ${text || ''}`.trim()
 
     await conn.sendMessage(
       m.chat,
       {
-        video: { url: json.data.url },
-        gifPlayback: true,
+        image: { url },
         caption,
-        mentions,
+        mentions: mencionado ? [autor, mencionado] : [autor],
       },
       { quoted: m.raw }
     )
   } catch (e) {
-    console.log(`Error en reacción "${tipo}":`, e)
+    console.log('Error obteniendo reacción:', e)
     await conn.sendMessage(
       m.chat,
-      { text: dfail(`Error obteniendo la reacción "${tipo}":\n> ${e.message}`) },
+      { text: dfail(`No se pudo obtener la reacción "${command}":\n> ${e.message}`) },
       { quoted: m.raw }
     )
   }
 }
 
-const claves = [...Object.keys(REACCIONES_SOLO), ...Object.keys(REACCIONES_PAREJA)]
-
-handler.help = [
-  ...Object.keys(REACCIONES_SOLO),
-  ...Object.keys(REACCIONES_PAREJA).map((c) => `${c} @tag`),
-]
-handler.tags = ['reacciones']
-// RegExp a propósito (ver comentario arriba) para que menu.js lo ignore.
-handler.command = new RegExp(`^(${claves.join('|')})$`, 'i')
+handler.help = ['reacciones', ...Object.keys(REACCIONES)]
+handler.tags = ['fun']
+handler.command = ['reacciones', 'listareacciones', ...Object.keys(REACCIONES)]
 
 module.exports = handler
