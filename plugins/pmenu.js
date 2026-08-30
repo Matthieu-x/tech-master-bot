@@ -1,6 +1,6 @@
 const { botName, creators, prefijo } = require('../settings')
 
-const IMAGEN_MENU = 'https://i.postimg.cc/fbb31CFP/file-00000000970c820e87f9ea0a9bc0e53b.png'
+const IMAGEN_MENU = 'https://files.catbox.moe/23ppfd.png'
 
 let handler = async (m, { conn }) => {
   const listaCreadores = creators
