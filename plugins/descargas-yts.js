@@ -1,5 +1,5 @@
-const API_KEY = 'yosoyyo_sk_qin39ynp'
-const API_URL = 'https://apiyosoyyo-ofc.onrender.com/api/ytsearch'
+const API_KEY = 'lem_dc158e5ad3f4f6ee2de2905a222bfb68f61dd754'
+const API_URL = 'https://api.lempi.lat/s/youtube'
 
 let handler = async (m, { conn, text, usedPrefix }) => {
   if (!text || !text.trim()) {
@@ -7,90 +7,88 @@ let handler = async (m, { conn, text, usedPrefix }) => {
       m.chat,
       {
         text:
-          `❌ Debes escribir algo para buscar.\n\n` +
+          `❌ Escribe algo para buscar.\n\n` +
           `📌 Ejemplo:\n` +
-          `> ${usedPrefix}yts William Luna\n\n` +
-          `> ${usedPrefix}yts funny cats`
+          `${usedPrefix}yts William Luna`
       },
       { quoted: m.raw }
     )
   }
 
-  const consulta = text.trim()
+  const query = text.trim()
 
   try {
     await conn.sendMessage(
       m.chat,
       {
-        text: `🔎 Buscando en YouTube...\n> ${consulta}`
+        text: `🔎 Buscando en YouTube...\n\n> ${query}`
       },
       { quoted: m.raw }
     )
 
     const url =
-      `${API_URL}?q=${encodeURIComponent(consulta)}` +
-      `&apiKey=${encodeURIComponent(API_KEY)}`
+      `${API_URL}?query=${encodeURIComponent(query)}` +
+      `&apikey=${encodeURIComponent(API_KEY)}`
 
-    const respuesta = await fetch(url)
+    const response = await fetch(url)
 
-    if (!respuesta.ok) {
-      throw new Error(`API respondió con HTTP ${respuesta.status}`)
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`)
     }
 
-    const datos = await respuesta.json()
+    const data = await response.json()
 
-    if (!datos || !Array.isArray(datos.result) || datos.result.length === 0) {
+    if (
+      !data ||
+      !data.status ||
+      !data.datos ||
+      !data.datos.results ||
+      !Array.isArray(data.datos.results.videos)
+    ) {
+      throw new Error('La API no devolvió resultados válidos')
+    }
+
+    const videos = data.datos.results.videos
+
+    if (videos.length === 0) {
       return conn.sendMessage(
         m.chat,
         {
-          text: `❌ No encontré resultados para: ${consulta}`
+          text: `❌ No encontré resultados para: ${query}`
         },
         { quoted: m.raw }
       )
     }
 
-    const resultados = datos.result.slice(0, 10)
+    const resultados = videos.slice(0, 10)
 
-    let textoResultado =
+    let mensaje =
       `╭━━━〔 🔎 YOUTUBE SEARCH 〕━━━╮\n` +
-      `┃ 🔍 Búsqueda: ${consulta}\n` +
+      `┃ 🔍 Búsqueda: ${query}\n` +
       `┃ 📊 Resultados: ${resultados.length}\n` +
       `╰━━━━━━━━━━━━━━━━━━━━━━╯\n\n`
 
-    resultados.forEach((item, index) => {
-      const vistas = Number(item.views || 0).toLocaleString('es-ES')
-
-      textoResultado +=
-        `*${index + 1}. ${item.title || 'Sin título'}*\n` +
-        `👤 ${item.channelName || 'Desconocido'}\n` +
-        `⏱️ ${item.duration || 'Desconocida'}\n` +
-        `👁️ ${vistas} vistas\n` +
-        `📅 ${item.publishedAgo || 'Desconocido'}\n` +
-        `🔗 ${item.videoUrl || 'Sin URL'}\n\n`
+    resultados.forEach((video, index) => {
+      mensaje +=
+        `╭─〔 ${index + 1} 〕──────────\n` +
+        `│ 🎬 *${video.title || 'Sin título'}*\n` +
+        `│ 👤 Canal: ${video.channel || 'Desconocido'}\n` +
+        `│ ⏱️ Duración: ${video.duration || 'Desconocida'}\n` +
+        `│ 👁️ Vistas: ${video.views || 'Desconocidas'}\n` +
+        `│ 📅 Publicado: ${video.published || 'Desconocido'}\n` +
+        `│ 🔗 ${video.url || 'Sin URL'}\n` +
+        `╰────────────────────\n\n`
     })
 
-    textoResultado +=
-      `━━━━━━━━━━━━━━━━━━━━\n` +
-      `🤖 YOSOYYO API`
+    mensaje += `🤖 Powered by Lempi API`
 
-    const primera = resultados[0]
-
-    if (primera.thumbnailUrl) {
-      await conn.sendMessage(
-        m.chat,
-        {
-          image: { url: primera.thumbnailUrl },
-          caption: textoResultado
-        },
-        { quoted: m.raw }
-      )
-    } else {
-      await conn.sendMessage(
-        m.chat,
-        { text: textoResultado },
-        { quoted: m.raw }
-      )
-    }
+    await conn.sendMessage(
+      m.chat,
+      {
+        text: mensaje
+      },
+      { quoted: m.raw }
+    )
 
   } catch (error) {
     console.error('[YTS]', error)
@@ -99,7 +97,7 @@ let handler = async (m, { conn, text, usedPrefix }) => {
       m.chat,
       {
         text:
-          `❌ Error realizando la búsqueda.\n\n` +
+          `❌ Ocurrió un error al buscar.\n\n` +
           `> ${error.message || 'Error desconocido'}`
       },
       { quoted: m.raw }
@@ -108,7 +106,7 @@ let handler = async (m, { conn, text, usedPrefix }) => {
 }
 
 handler.help = ['yts <búsqueda>', 'ytsearch <búsqueda>']
-handler.tags = ['downloader']
+handler.tags = ['search']
 handler.command = ['yts', 'ytsearch']
 handler.registro = false
 
