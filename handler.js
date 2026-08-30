@@ -6,11 +6,6 @@ const { estaRegistrado, obtenerGrupo } = require('./lib/db')
 
 const pluginsDir = path.join(__dirname, 'plugins')
 
-/**
- * Carga (o recarga) todos los plugins de la carpeta /plugins.
- * Usamos delete require.cache para poder agregar/editar plugins
- * en caliente sin tener que reiniciar el bot (ej: con savefile.js).
- */
 function loadPlugins() {
   const plugins = []
 
