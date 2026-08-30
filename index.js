@@ -165,11 +165,22 @@ function serializarMensaje(msg) {
     (tipoMensaje === 'conversation' ? msg.message.conversation : '') ||
     ''
 
+  const sender = msg.key.participant || msg.key.remoteJid // jid real de quien escribió (sirve para mención real)
+
+  // OJO: desde que WhatsApp usa @lid en varios grupos, "sender" puede ser
+  // un identificador interno (ej: 269715926691844@lid) en vez del número
+  // de teléfono real. WhatsApp igual manda el número real en un campo
+  // alterno (participantAlt / participantPn) -- lo usamos para todo lo
+  // que necesite comparar contra un número de teléfono real (ej: owner).
+  const senderAlt = msg.key.participantAlt || msg.key.participantPn || null
+  const senderNumero = (sender.endsWith('@lid') && senderAlt) ? senderAlt : sender
+
   return {
     raw: msg,
     key: msg.key,
     chat: msg.key.remoteJid, // grupo o chat privado
-    sender: msg.key.participant || msg.key.remoteJid, // jid real de quien escribió (sirve para mención real)
+    sender, // jid "de mención" -- puede ser @lid, úsalo para @mencionar
+    senderNumero, // jid con el número de teléfono real -- úsalo para comparar owners, etc.
     fromMe: msg.key.fromMe,
     text: texto,
     isGroup: msg.key.remoteJid?.endsWith('@g.us'),
