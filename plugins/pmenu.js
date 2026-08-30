@@ -15,7 +15,7 @@ const {
 } = require('../settings')
 
 const IMAGEN_MENU =
-  'https://files.catbox.moe/23ppfd.png'
+  'http://matthieu.hidenfree.com/cdn/05d48bd67ee7fa1963fb05ab.png'
 
 function cargarComandos() {
   const pluginsDir = path.join(
