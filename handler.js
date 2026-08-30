@@ -26,12 +26,6 @@ function loadPlugins() {
   return plugins
 }
 
-/**
- * Procesa un mensaje entrante y ejecuta el plugin que corresponda.
- *
- * @param {object} conn   - socket de baileys (ultra-baileys)
- * @param {object} m      - mensaje ya "serializado" (chat, sender, text, etc.)
- */
 async function handler(conn, m) {
   const plugins = loadPlugins()
 
