@@ -85,6 +85,6 @@ handler.help = [
   ...Object.keys(REACCIONES_PAREJA).map((c) => `${c} @tag`),
 ]
 handler.tags = ['reacciones']
-handler.command = new RegExp(`^(${claves.join('|')})$`, 'i')
+handler.command = claves
 
 module.exports = handler
