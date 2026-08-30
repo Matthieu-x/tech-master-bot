@@ -7,7 +7,7 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "baileys": "github:russellxz/ultra-baileys",
+    "@whiskeysockets/baileys": "npm:@itsliaaa/baileys@latest",
     "pino": "^8.0.0",
     "qrcode-terminal": "^0.12.0"
   }
