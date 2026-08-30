@@ -98,7 +98,7 @@ async function handler(conn, m) {
   if (requiereRegistro && !estaRegistrado(m)) {
     return conn.sendMessage(
       m.chat,
-      { text: dfail(`Necesitas registrarte antes de usar comandos.\n> Usa: ${usedPrefix}reg Nombre.Edad\n> Ejemplo: ${usedPrefix}reg Carlos.20`) },
+      { text: dfail(`Necesitas registrarte antes de usar comandos.\n> Usa: ${usedPrefix}reg Nombre.Edad\n> Ejemplo: ${usedPrefix}reg Matthieu.20`) },
       { quoted: m.raw }
     )
   }
