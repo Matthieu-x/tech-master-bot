@@ -43,7 +43,7 @@ let handler = async (m, { conn, usedPrefix }) => {
   await conn.sendMessage(
     m.chat,
     {
-      text,
+      text: texto,
       footer: 'Tech Master Bot',
       buttons: [
         {
