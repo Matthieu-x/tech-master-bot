@@ -68,7 +68,7 @@ let handler = async (m, { conn, usedPrefix }) => {
 }
 
 handler.help = ['perfil']
-handler.tags = ['general']
+handler.tags = ['usuario']
 handler.command = ['perfil', 'profile']
 
 module.exports = handler
