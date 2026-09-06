@@ -47,21 +47,14 @@ let handler = async (m, { conn, usedPrefix }) => {
       footer: 'Tech Master Bot',
       buttons: [
         {
-          buttonId: `${usedPrefix}menu`,
-          buttonText: {
-            displayText: '📋 Menú'
-          },
-          type: 1
+          text: '📋 Menú',
+          id: `${usedPrefix}menu`
         },
         {
-          buttonId: `${usedPrefix}ping`,
-          buttonText: {
-            displayText: '🏓 Ping'
-          },
-          type: 1
+          text: '🏓 Ping',
+          id: `${usedPrefix}ping`
         }
-      ],
-      headerType: 1
+      ]
     },
     { quoted: m.raw }
   )
