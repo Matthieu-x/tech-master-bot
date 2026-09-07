@@ -19,6 +19,7 @@ const { mostrarBannerInicio, mostrarConexionExitosa } = require('./lib/banner')
 const { manejarParticipantes } = require('./lib/welcome')
 const { serializarMensaje } = require('./lib/serializar')
 const { reconectarSubbotsGuardados, registrarActividadGrupoPrincipal } = require('./lib/subbots')
+const { logMensaje, logError } = require('./lib/logger')
 
 function preguntar(texto) {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
@@ -117,10 +118,12 @@ async function iniciar() {
 
     const m = serializarMensaje(msg)
 
+    logMensaje('BOT PRINCIPAL', m)
+
     try {
       await handler(conn, m)
     } catch (e) {
-      console.log('Error en handler:', e)
+      logError('BOT PRINCIPAL', m, e)
     }
   })
 
