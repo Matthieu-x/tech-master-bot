@@ -1,7 +1,8 @@
 const { enviarLista } = require('../lib/botones')
 
 const API_KEY = 'lem_dc158e5ad3f4f6ee2de2905a222bfb68f61dd754'
-const API_URL = 'https://api.lempi.lat/s/youtube'
+const API_URL_SEARCH = 'https://api.lempi.lat/s/youtube'
+const API_URL_YTV = 'https://api.lempi.lat/dl/ytv'
 
 const TIEMPO_SELECCION_MS = 3 * 60 * 1000
 const MAX_RESULTADOS = 10
@@ -23,9 +24,30 @@ function claveBusqueda(m) {
   return `${m.chat}_${m.senderNumero || m.sender}`
 }
 
+function extraerVideoId(url) {
+  const coincidencia = String(url || '').match(
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/
+  )
+  return coincidencia ? coincidencia[1] : null
+}
+
+function obtenerMiniatura(video) {
+  const directa =
+    video.thumbnail ||
+    video.thumb ||
+    video.miniatura ||
+    video.imagen ||
+    video.image
+
+  if (directa) return directa
+
+  const id = extraerVideoId(video.url)
+  return id ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : null
+}
+
 async function buscarEnYoutube(query) {
   const url =
-    `${API_URL}?query=${encodeURIComponent(query)}` +
+    `${API_URL_SEARCH}?query=${encodeURIComponent(query)}` +
     `&apikey=${encodeURIComponent(API_KEY)}`
 
   const response = await fetch(url)
@@ -49,18 +71,24 @@ async function buscarEnYoutube(query) {
   return data.datos.results.videos
 }
 
-function construirDetalleVideo(video) {
-  return (
-    `╭━━━〔 🎬 YOUTUBE 〕━━━╮\n` +
-    `┃ 📌 Título: ${video.title || 'Sin título'}\n` +
-    `┃ 👤 Canal: ${video.channel || 'Desconocido'}\n` +
-    `┃ ⏱️ Duración: ${video.duration || 'Desconocida'}\n` +
-    `┃ 👁️ Vistas: ${video.views || 'Desconocidas'}\n` +
-    `┃ 📅 Publicado: ${video.published || 'Desconocido'}\n` +
-    `╰━━━━━━━━━━━━━━━━━━━━╯\n\n` +
-    `🔗 ${video.url || 'Sin URL'}\n\n` +
-    `🤖 Powered by Lempi API`
-  )
+async function descargarVideoYoutube(youtubeUrl) {
+  const apiUrl =
+    `${API_URL_YTV}?url=${encodeURIComponent(youtubeUrl)}` +
+    `&apikey=${encodeURIComponent(API_KEY)}`
+
+  const response = await fetch(apiUrl)
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`)
+  }
+
+  const data = await response.json()
+
+  if (!data || !data.status || !data.datos || !data.datos.url) {
+    throw new Error('La API no devolvió el enlace de descarga')
+  }
+
+  return data
 }
 
 let handler = async (m, { conn, text, usedPrefix, command, args }) => {
@@ -69,6 +97,7 @@ let handler = async (m, { conn, text, usedPrefix, command, args }) => {
   const comando = (command || '').toLowerCase()
 
   // Se dispara al tocar una fila de la lista: "#ytsver <indice>"
+  // Descarga y manda el video directo, igual que .ytv
   if (comando === 'ytsver') {
     const indice = Number(args[0])
     const clave = claveBusqueda(m)
@@ -86,11 +115,62 @@ let handler = async (m, { conn, text, usedPrefix, command, args }) => {
       )
     }
 
-    return conn.sendMessage(
-      m.chat,
-      { text: construirDetalleVideo(pendiente.videos[indice]) },
-      { quoted: m.raw }
-    )
+    const video = pendiente.videos[indice]
+
+    if (!video.url) {
+      return conn.sendMessage(
+        m.chat,
+        { text: `❌ Ese resultado no tiene un enlace válido para descargar.` },
+        { quoted: m.raw }
+      )
+    }
+
+    try {
+      await conn.sendMessage(
+        m.chat,
+        { text: `⏳ Descargando video...\n\n🎬 ${video.title || 'Sin título'}` },
+        { quoted: m.raw }
+      )
+
+      const data = await descargarVideoYoutube(video.url)
+
+      const videoUrl = data.datos.url
+      const filename =
+        data.datos.archivo ||
+        `${data.titulo || video.title || 'youtube'}.mp4`
+
+      const caption =
+        `╭━━━〔 🎬 YOUTUBE VIDEO 〕━━━╮\n` +
+        `┃ 🎵 ${data.titulo || video.title || 'Sin título'}\n` +
+        `┃ 👤 ${data.canal || video.channel || 'Desconocido'}\n` +
+        `┃ ⏱️ ${data.duracion || video.duration || 'Desconocida'}\n` +
+        `┃ 🎞️ Calidad: ${data.datos.calidad || 'Desconocida'}\n` +
+        `┃ 💾 Tamaño: ${data.datos.tamaño || 'Desconocido'}\n` +
+        `╰━━━━━━━━━━━━━━━━━━━━━━╯`
+
+      return conn.sendMessage(
+        m.chat,
+        {
+          video: { url: videoUrl },
+          mimetype: 'video/mp4',
+          fileName: filename,
+          caption
+        },
+        { quoted: m.raw }
+      )
+    } catch (error) {
+      console.error('[YTS-VER]', error)
+
+      return conn.sendMessage(
+        m.chat,
+        {
+          text:
+            `❌ No se pudo descargar el video.\n\n` +
+            `> ${error.message || 'Error desconocido'}`
+        },
+        { quoted: m.raw }
+      )
+    }
   }
 
   if (!text || !text.trim()) {
@@ -133,12 +213,15 @@ let handler = async (m, { conn, text, usedPrefix, command, args }) => {
       expira: Date.now() + TIEMPO_SELECCION_MS,
     })
 
+    const miniatura = obtenerMiniatura(resultados[0])
+
     return enviarLista(conn, m.chat, {
       texto: `🔎 *Resultados para:* ${query}`,
-      footer: 'Toca una opción para ver el detalle · expira en 3 min',
+      footer: 'Toca una opción para descargar el video · expira en 3 min',
       titulo: 'YouTube Search',
       textoBoton: 'Ver resultados',
       mensajeCitado: m.raw,
+      imagen: miniatura || undefined,
       secciones: [
         {
           titulo: `${resultados.length} resultado(s)`,
