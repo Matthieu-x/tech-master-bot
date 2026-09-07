@@ -10,7 +10,7 @@
     "libsignal": "npm:libsignal-node@latest"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "github:russellxz/ultra-baileys",
+    "baileys": "github:russellxz/ultra-baileys",
     "node-webpmux": "^3.1.0",
     "pino": "^8.0.0",
     "qrcode": "^1.5.3",
