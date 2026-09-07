@@ -1,3 +1,68 @@
+const APIS = [
+  {
+    nombre: 'NekosBest',
+    url: 'https://nekos.best/api/v2/waifu',
+    obtener: data => data?.results?.[0]?.url
+  },
+  {
+    nombre: 'Waifu.im',
+    url: 'https://api.waifu.im/search',
+    obtener: data => data?.images?.[0]?.url
+  },
+  {
+    nombre: 'Waifu.pics',
+    url: 'https://api.waifu.pics/sfw/waifu',
+    obtener: data => data?.url
+  }
+]
+
+async function obtenerWaifu() {
+  const errores = []
+
+  for (const api of APIS) {
+    try {
+      const controller = new AbortController()
+
+      const timeout = setTimeout(() => {
+        controller.abort()
+      }, 10000)
+
+      const response = await fetch(api.url, {
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Tech-Master-Bot/1.0',
+          'Accept': 'application/json'
+        },
+        signal: controller.signal
+      })
+
+      clearTimeout(timeout)
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+
+      const data = await response.json()
+      const url = api.obtener(data)
+
+      if (!url || !/^https?:\/\//i.test(url)) {
+        throw new Error('No devolvió una imagen válida')
+      }
+
+      return {
+        url,
+        api: api.nombre
+      }
+    } catch (error) {
+      errores.push(`${api.nombre}: ${error.message}`)
+    }
+  }
+
+  throw new Error(
+    errores.join('\n')
+  )
+}
+
 let handler = async (m, { conn }) => {
   try {
     await conn.sendMessage(
@@ -8,36 +73,20 @@ let handler = async (m, { conn }) => {
       { quoted: m.raw }
     )
 
-    const response = await fetch(
-      'https://api.waifu.pics/sfw/waifu'
-    )
-
-    if (!response.ok) {
-      throw new Error(
-        `API HTTP ${response.status}`
-      )
-    }
-
-    const data = await response.json()
-
-    if (!data.url) {
-      throw new Error(
-        'La API no devolvió una imagen'
-      )
-    }
+    const resultado = await obtenerWaifu()
 
     await conn.sendMessage(
       m.chat,
       {
         image: {
-          url: data.url
+          url: resultado.url
         },
         caption:
           `╭━━━〔 🌸 WAIFU 〕━━━╮\n` +
           `┃\n` +
           `┃ 💮 *Waifu aleatoria*\n` +
           `┃\n` +
-          `┃ 🌸 Disfruta tu waifu\n` +
+          `┃ 🌐 Fuente: ${resultado.api}\n` +
           `┃\n` +
           `╰━━━━━━━━━━━━━━━━━━╯`
       },
@@ -51,6 +100,7 @@ let handler = async (m, { conn }) => {
       {
         text:
           `❌ *No pude obtener la waifu*\n\n` +
+          `Todas las APIs disponibles fallaron.\n\n` +
           `> ${error.message || 'Error desconocido'}`
       },
       { quoted: m.raw }
