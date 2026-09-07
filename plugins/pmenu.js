@@ -77,18 +77,31 @@ let handler = async (m, { conn, usedPrefix }) => {
     `〄 *_Comandos disponibles_*${comandos}\n` +
     `> Ejemplo: ${prefijo}ping`
 
+  const botones = [
+    { text: '🏓 Ping', id: `${prefijo}ping` }
+  ]
+
   try {
     await conTimeout(
       conn.sendMessage(
         m.chat,
-        { image: fs.readFileSync(IMAGEN_MENU), caption: texto, mentions: [m.sender] },
+        {
+          image: fs.readFileSync(IMAGEN_MENU),
+          caption: texto,
+          mentions: [m.sender],
+          buttons: botones,
+        },
         { quoted: m.raw }
       ),
       TIMEOUT_IMAGEN_MS
     )
   } catch (error) {
     console.log(`ꕥ\n> No se pudo enviar la imagen del menú (${error.message}), mandando solo texto.`)
-    await conn.sendMessage(m.chat, { text: texto, mentions: [m.sender] }, { quoted: m.raw })
+    await conn.sendMessage(
+      m.chat,
+      { text: texto, mentions: [m.sender], buttons: botones },
+      { quoted: m.raw }
+    )
   }
 }
 
