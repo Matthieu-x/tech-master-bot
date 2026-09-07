@@ -4,7 +4,6 @@ const os = require('os')
 const path = require('path')
 const crypto = require('crypto')
 const pino = require('pino')
-const { exec } = require('child_process')
 
 const CATBOX_URL = 'https://catbox.moe/user/api.php'
 const MAX_SIZE = 200 * 1024 * 1024
@@ -73,25 +72,6 @@ function detectarMedia(mensaje) {
   return null
 }
 
-function ejecutar(comando) {
-  return new Promise((resolve, reject) => {
-    exec(
-      comando,
-      {
-        maxBuffer: 1024 * 1024 * 20
-      },
-      (error, stdout, stderr) => {
-        if (error) {
-          reject(new Error(stderr || error.message))
-          return
-        }
-
-        resolve(stdout.trim())
-      }
-    )
-  })
-}
-
 function crearArchivoTemporal(nombre) {
   const extension = path.extname(nombre) || '.bin'
 
@@ -101,20 +81,39 @@ function crearArchivoTemporal(nombre) {
   )
 }
 
-async function subirCatbox(archivo) {
-  const resultado = await ejecutar(
-    `curl -L --max-time 180 -sS -X POST "${CATBOX_URL}" ` +
-    `-F "reqtype=file" ` +
-    `-F "fileToUpload=@${archivo}"`
+async function subirCatbox(buffer, nombre, mime) {
+  const form = new FormData()
+
+  form.append('reqtype', 'file')
+  form.append(
+    'fileToUpload',
+    new Blob([buffer], { type: mime }),
+    nombre
   )
 
-  if (!resultado || !/^https?:\/\//i.test(resultado)) {
+  const response = await fetch(CATBOX_URL, {
+    method: 'POST',
+    body: form
+  })
+
+  const resultado = await response.text()
+
+  if (!response.ok) {
+    throw new Error(
+      `Catbox HTTP ${response.status}: ${resultado}`
+    )
+  }
+
+  if (
+    !resultado ||
+    !/^https?:\/\//i.test(resultado.trim())
+  ) {
     throw new Error(
       `Catbox no devolvió una URL válida: ${resultado || 'respuesta vacía'}`
     )
   }
 
-  return resultado
+  return resultado.trim()
 }
 
 let handler = async (m, { conn, usedPrefix }) => {
@@ -127,7 +126,7 @@ let handler = async (m, { conn, usedPrefix }) => {
       {
         text:
           `❌ *No encontré ningún archivo*\n\n` +
-          `📌 Envía una imagen, video, audio o documento con el comando:\n\n` +
+          `📌 Envía una imagen, video, audio o documento con:\n\n` +
           `${usedPrefix}subir\n\n` +
           `También puedes responder a un archivo con:\n` +
           `${usedPrefix}subir`
@@ -174,7 +173,11 @@ let handler = async (m, { conn, usedPrefix }) => {
 
     fs.writeFileSync(archivoTemporal, buffer)
 
-    const url = await subirCatbox(archivoTemporal)
+    const url = await subirCatbox(
+      buffer,
+      media.nombre,
+      media.mime
+    )
 
     await conn.sendMessage(
       m.chat,
@@ -182,7 +185,7 @@ let handler = async (m, { conn, usedPrefix }) => {
         text:
           `╭━━━〔 ☁️ CATBOX 〕━━━╮\n` +
           `┃\n` +
-          `┃ ✅ *Archivo subido correctamente*\n` +
+          `┃ ✅ *Archivo subido*\n` +
           `┃\n` +
           `┃ 📦 Tipo: ${media.tipo}\n` +
           `┃ 📄 ${media.nombre}\n` +
