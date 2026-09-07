@@ -1,4 +1,4 @@
-const API_KEY = 'ORBIT-UODSS'
+const API_KEY = 'ORBIT-4096939993'
 const API_URL = 'https://api-orbit-9doj.onrender.com/api/v1/pinterest'
 
 let handler = async (m, { conn, text, usedPrefix }) => {
