@@ -17,8 +17,8 @@ const { numeroBot, autoUpdatePuerto, autoUpdateSecreto, autoUpdateRama } = requi
 const { iniciarAutoUpdate, iniciarWebhook } = require('./lib/autoupdate')
 const { mostrarBannerInicio, mostrarConexionExitosa } = require('./lib/banner')
 const { manejarParticipantes } = require('./lib/welcome')
-const { serializarMensaje, normalizarJid } = require('./lib/serializar')
-const { reconectarSubbotsGuardados } = require('./lib/subbots')
+const { serializarMensaje } = require('./lib/serializar')
+const { reconectarSubbotsGuardados, registrarActividadGrupoPrincipal } = require('./lib/subbots')
 
 function preguntar(texto) {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
@@ -96,7 +96,6 @@ async function iniciar() {
       console.log('Conexión cerrada.', debeReconectar ? 'Reconectando...' : 'Sesión cerrada, escanea el QR de nuevo.')
       if (debeReconectar) iniciar()
     } else if (connection === 'open') {
-      global.mainBotJid = conn.user?.id ? normalizarJid(conn.user.id) : null
       mostrarConexionExitosa(global.botName)
     }
   })
@@ -105,7 +104,16 @@ async function iniciar() {
     if (type !== 'notify') return
 
     const msg = messages[0]
-    if (!msg.message || msg.key.fromMe) return
+    if (!msg.message) return
+
+    // Marca este grupo como "atendido por el bot principal" (independiente
+    // de quién mandó el mensaje), para que los subbots sepan que no deben
+    // responder ahí y evitar respuestas duplicadas.
+    if (msg.key.remoteJid?.endsWith('@g.us')) {
+      registrarActividadGrupoPrincipal(msg.key.remoteJid)
+    }
+
+    if (msg.key.fromMe) return
 
     const m = serializarMensaje(msg)
 
