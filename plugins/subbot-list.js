@@ -1,35 +1,27 @@
-const { eliminarSubbot } = require('../lib/subbots')
-const { owner } = require('../settings')
+const { listarSubbots } = require('../lib/subbots')
 
-let handler = async (m, { conn, args }) => {
-  const numeroPropio = (m.senderNumero || m.sender).split('@')[0].split(':')[0].replace(/[^0-9]/g, '')
-  const numerosOwner = owner.map(o => o[0].replace(/[^0-9]/g, ''))
-  const esOwner = numerosOwner.includes(numeroPropio)
+let handler = async (m, { conn }) => {
+  const subbots = listarSubbots()
 
-  let idObjetivo = numeroPropio
-
-  if (args[0]) {
-    if (!esOwner) {
-      return conn.sendMessage(
-        m.chat,
-        { text: '❌ Solo puedes eliminar tu propio subbot (usa .delsubbot sin argumentos).' },
-        { quoted: m.raw }
-      )
-    }
-    idObjetivo = args[0].replace(/[^0-9]/g, '')
+  if (!subbots.length) {
+    return conn.sendMessage(m.chat, { text: '📭 No hay subbots vinculados.' }, { quoted: m.raw })
   }
 
-  const eliminado = eliminarSubbot(idObjetivo)
+  const texto = subbots
+    .map((s, i) => {
+      let estado = '🔴 Desconectado'
+      if (s.conectado) estado = '🟢 Conectado'
+      else if (s.pendiente) estado = '🟡 Pendiente de vincular'
+      return `${i + 1}. +${s.numero} — ${estado}`
+    })
+    .join('\n')
 
-  if (!eliminado) {
-    return conn.sendMessage(m.chat, { text: '❌ No se encontró ese subbot.' }, { quoted: m.raw })
-  }
-
-  await conn.sendMessage(m.chat, { text: '🗑️ Subbot eliminado correctamente.' }, { quoted: m.raw })
+  await conn.sendMessage(m.chat, { text: `📋 Subbots:\n\n${texto}` }, { quoted: m.raw })
 }
 
-handler.help = ['delsubbot', 'delsubbot <numero> (owner)']
+handler.help = ['subbots']
 handler.tags = ['subbot']
-handler.command = ['delsubbot', 'unsubbot']
+handler.command = ['subbots', 'listsubbots']
+handler.owner = true
 
 module.exports = handler
