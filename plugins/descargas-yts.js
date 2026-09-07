@@ -6,7 +6,10 @@ const API_URL = 'https://api-orbit-9doj.onrender.com/api/v1/search'
 const TIEMPO_SELECCION_MS = 3 * 60 * 1000
 const MAX_RESULTADOS = 10
 
-if (!global.ytsBusquedasPendientes) global.ytsBusquedasPendientes = new Map()
+if (!global.ytsBusquedasPendientes) {
+  global.ytsBusquedasPendientes = new Map()
+}
+
 const busquedasPendientes = global.ytsBusquedasPendientes
 
 function limpiarBusquedasVencidas() {
@@ -47,37 +50,17 @@ async function buscarEnYoutube(query) {
   return data.results
 }
 
-function construirDetalleVideo(video) {
+function construirDetalle(video) {
   const titulo = video.title || 'Sin título'
   const autor = video.author || 'Desconocido'
   const duracion = video.duration || 'Desconocida'
   const vistas = video.views || 'Desconocidas'
   const publicado = video.publishedAt || 'Desconocido'
-  const url = video.url || `https://www.youtube.com/watch?v=${video.videoId}`
+  const url =
+    video.url ||
+    `https://www.youtube.com/watch?v=${video.videoId}`
 
   return (
-    `╭━━━〔 🎬 YOUTUBE 〕━━━╮\n` +
-    `┃ 📌 Título: ${titulo}\n` +
-    `┃ 👤 Canal: ${autor}\n` +
-    `┃ ⏱️ Duración: ${duracion}\n` +
-    `┃ 👁️ Vistas: ${vistas}\n` +
-    `┃ 📅 Publicado: ${publicado}\n` +
-    `╰━━━━━━━━━━━━━━━━━━━━╯\n\n` +
-    `🔗 ${url}\n\n` +
-    `🆔 ID: ${video.videoId || 'Desconocido'}\n` +
-    `🌐 Orbit API`
-  )
-}
-
-async function enviarDetalle(conn, m, video) {
-  const titulo = video.title || 'Sin título'
-  const autor = video.author || 'Desconocido'
-  const duracion = video.duration || 'Desconocida'
-  const vistas = video.views || 'Desconocidas'
-  const publicado = video.publishedAt || 'Desconocido'
-  const url = video.url || `https://www.youtube.com/watch?v=${video.videoId}`
-
-  const texto =
     `╭━━━〔 🎬 YOUTUBE 〕━━━╮\n` +
     `┃ 📌 ${titulo}\n` +
     `┃ 👤 ${autor}\n` +
@@ -86,35 +69,65 @@ async function enviarDetalle(conn, m, video) {
     `┃ 📅 ${publicado}\n` +
     `╰━━━━━━━━━━━━━━━━━━━━╯\n\n` +
     `🔗 ${url}\n\n` +
-    `🤖 Orbit API`
-
-  if (video.thumbnail) {
-    try {
-      return await conn.sendMessage(
-        m.chat,
-        {
-          image: { url: video.thumbnail },
-          caption: texto
-        },
-        { quoted: m.raw }
-      )
-    } catch {
-      return conn.sendMessage(
-        m.chat,
-        { text: texto },
-        { quoted: m.raw }
-      )
-    }
-  }
-
-  return conn.sendMessage(
-    m.chat,
-    { text: texto },
-    { quoted: m.raw }
+    `🎵 Audio: yta\n` +
+    `🎬 Video: ytv`
   )
 }
 
-let handler = async (m, { conn, text, usedPrefix, command, args }) => {
+async function enviarSeleccion(conn, m, video, usedPrefix) {
+  const titulo = video.title || 'Sin título'
+  const autor = video.author || 'Desconocido'
+  const duracion = video.duration || 'Desconocida'
+  const vistas = video.views || 'Desconocidas'
+  const url =
+    video.url ||
+    `https://www.youtube.com/watch?v=${video.videoId}`
+
+  const texto =
+    `╭━━━〔 🎬 YOUTUBE 〕━━━╮\n` +
+    `┃ 📌 ${titulo}\n` +
+    `┃ 👤 ${autor}\n` +
+    `┃ ⏱️ ${duracion}\n` +
+    `┃ 👁️ ${vistas}\n` +
+    `╰━━━━━━━━━━━━━━━━━━━━╯\n\n` +
+    `🔗 ${url}\n\n` +
+    `👇 Selecciona qué deseas descargar:`
+
+  return enviarLista(conn, m.chat, {
+    texto,
+    footer: 'Orbit YouTube Search',
+    titulo: 'Descargar YouTube',
+    textoBoton: 'Opciones',
+    mensajeCitado: m.raw,
+    secciones: [
+      {
+        titulo: 'Descargas',
+        filas: [
+          {
+            titulo: '🎵 Descargar Audio',
+            id: `${usedPrefix}yta ${url}`,
+            descripcion: 'Descargar como MP3'
+          },
+          {
+            titulo: '🎬 Descargar Video',
+            id: `${usedPrefix}ytv ${url}`,
+            descripcion: 'Descargar como MP4'
+          },
+          {
+            titulo: '🔗 Ver enlace',
+            id: `${usedPrefix}yturl ${video.videoId}`,
+            descripcion: 'Mostrar enlace de YouTube'
+          }
+        ]
+      }
+    ]
+  })
+}
+
+let handler = async (
+  m,
+  { conn, text, usedPrefix, command, args }
+) => {
   limpiarBusquedasVencidas()
 
   const comando = (command || '').toLowerCase()
@@ -140,10 +153,38 @@ let handler = async (m, { conn, text, usedPrefix, command, args }) => {
       )
     }
 
-    return enviarDetalle(
+    return enviarSeleccion(
       conn,
       m,
-      pendiente.videos[indice]
+      pendiente.videos[indice],
+      usedPrefix
+    )
+  }
+
+  if (comando === 'yturl') {
+    const videoId = args[0]
+
+    if (!videoId) {
+      return conn.sendMessage(
+        m.chat,
+        {
+          text: `❌ No se encontró el ID del video.`
+        },
+        { quoted: m.raw }
+      )
+    }
+
+    const url =
+      `https://www.youtube.com/watch?v=${videoId}`
+
+    return conn.sendMessage(
+      m.chat,
+      {
+        text:
+          `🔗 *Enlace de YouTube*\n\n` +
+          `${url}`
+      },
+      { quoted: m.raw }
     )
   }
 
@@ -167,7 +208,7 @@ let handler = async (m, { conn, text, usedPrefix, command, args }) => {
       m.chat,
       {
         text:
-          `🔎 Buscando en YouTube...\n\n` +
+          `🔎 *Buscando en YouTube...*\n\n` +
           `> ${query}`
       },
       { quoted: m.raw }
@@ -175,7 +216,7 @@ let handler = async (m, { conn, text, usedPrefix, command, args }) => {
 
     const videos = await buscarEnYoutube(query)
 
-    if (videos.length === 0) {
+    if (!videos.length) {
       return conn.sendMessage(
         m.chat,
         {
@@ -191,7 +232,7 @@ let handler = async (m, { conn, text, usedPrefix, command, args }) => {
       .filter(video => video && video.videoId)
       .slice(0, MAX_RESULTADOS)
 
-    if (resultados.length === 0) {
+    if (!resultados.length) {
       throw new Error('No se encontraron videos válidos')
     }
 
@@ -206,25 +247,24 @@ let handler = async (m, { conn, text, usedPrefix, command, args }) => {
       texto:
         `🔎 *Resultados para:* ${query}\n\n` +
         `🎬 Encontrados: ${resultados.length}`,
-      footer: 'Selecciona un video · expira en 3 min',
+      footer:
+        'Selecciona un video · expira en 3 minutos',
       titulo: 'YouTube Search',
       textoBoton: 'Ver resultados',
       mensajeCitado: m.raw,
       secciones: [
         {
-          titulo: `${resultados.length} resultado(s)`,
-          filas: resultados.map((video, i) => {
-            const titulo = video.title || 'Sin título'
-            const autor = video.author || 'Desconocido'
-            const duracion = video.duration || '?'
-
-            return {
-              titulo: titulo.slice(0, 60),
-              id: `${usedPrefix}ytsver ${i}`,
-              descripcion:
-                `${autor.slice(0, 35)} · ${duracion}`
-            }
-          })
+          titulo:
+            `${resultados.length} resultado(s)`,
+          filas: resultados.map((video, i) => ({
+            titulo:
+              (video.title || 'Sin título')
+                .slice(0, 60),
+            id:
+              `${usedPrefix}ytsver ${i}`,
+            descripcion:
+              `${(video.author || 'Desconocido').slice(0, 35)} · ${video.duration || '?'}`
+          }))
         }
       ]
     })
@@ -235,7 +275,7 @@ let handler = async (m, { conn, text, usedPrefix, command, args }) => {
       m.chat,
       {
         text:
-          `❌ Ocurrió un error al buscar en YouTube.\n\n` +
+          `❌ Ocurrió un error al buscar.\n\n` +
           `> ${error.message || 'Error desconocido'}`
       },
       { quoted: m.raw }
@@ -253,7 +293,8 @@ handler.tags = ['search']
 handler.command = [
   'yts',
   'ytsearch',
-  'ytsver'
+  'ytsver',
+  'yturl'
 ]
 
 handler.registro = false
