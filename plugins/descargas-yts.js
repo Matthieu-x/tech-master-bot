@@ -6,7 +6,11 @@ const API_URL = 'https://api.lempi.lat/s/youtube'
 const TIEMPO_SELECCION_MS = 3 * 60 * 1000
 const MAX_RESULTADOS = 10
 
-const busquedasPendientes = new Map()
+// Los plugins se recargan (require.cache se limpia) en cada mensaje,
+// así que un Map normal del módulo se resetearía antes de que el
+// usuario llegue a tocar la lista. Usamos global para que sobreviva.
+if (!global.ytsBusquedasPendientes) global.ytsBusquedasPendientes = new Map()
+const busquedasPendientes = global.ytsBusquedasPendientes
 
 function limpiarBusquedasVencidas() {
   const ahora = Date.now()
