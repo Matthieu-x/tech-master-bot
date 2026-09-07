@@ -17,7 +17,7 @@ const { numeroBot, autoUpdatePuerto, autoUpdateSecreto, autoUpdateRama } = requi
 const { iniciarAutoUpdate, iniciarWebhook } = require('./lib/autoupdate')
 const { mostrarBannerInicio, mostrarConexionExitosa } = require('./lib/banner')
 const { manejarParticipantes } = require('./lib/welcome')
-const { serializarMensaje } = require('./lib/serializar')
+const { serializarMensaje, normalizarJid } = require('./lib/serializar')
 const { reconectarSubbotsGuardados } = require('./lib/subbots')
 
 function preguntar(texto) {
@@ -96,6 +96,7 @@ async function iniciar() {
       console.log('Conexión cerrada.', debeReconectar ? 'Reconectando...' : 'Sesión cerrada, escanea el QR de nuevo.')
       if (debeReconectar) iniciar()
     } else if (connection === 'open') {
+      global.mainBotJid = conn.user?.id ? normalizarJid(conn.user.id) : null
       mostrarConexionExitosa(global.botName)
     }
   })
