@@ -24,6 +24,15 @@ function claveBusqueda(m) {
   return `${m.chat}_${m.senderNumero || m.sender}`
 }
 
+const TIEMPO_MAX_IMAGEN_MS = 15_000
+
+function conTimeout(promesa, ms) {
+  return Promise.race([
+    promesa,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms)),
+  ])
+}
+
 function extraerVideoId(url) {
   const coincidencia = String(url || '').match(
     /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/
@@ -215,13 +224,12 @@ let handler = async (m, { conn, text, usedPrefix, command, args }) => {
 
     const miniatura = obtenerMiniatura(resultados[0])
 
-    return enviarLista(conn, m.chat, {
+    const datosLista = {
       texto: `🔎 *Resultados para:* ${query}`,
       footer: 'Toca una opción para descargar el video · expira en 3 min',
       titulo: 'YouTube Search',
       textoBoton: 'Ver resultados',
       mensajeCitado: m.raw,
-      imagen: miniatura || undefined,
       secciones: [
         {
           titulo: `${resultados.length} resultado(s)`,
@@ -232,7 +240,20 @@ let handler = async (m, { conn, text, usedPrefix, command, args }) => {
           })),
         },
       ],
-    })
+    }
+
+    if (miniatura) {
+      try {
+        return await conTimeout(
+          enviarLista(conn, m.chat, { ...datosLista, imagen: miniatura }),
+          TIEMPO_MAX_IMAGEN_MS
+        )
+      } catch (error) {
+        console.log(`[YTS] La miniatura tardó demasiado o falló (${error.message}), mandando la lista sin imagen.`)
+      }
+    }
+
+    return enviarLista(conn, m.chat, datosLista)
   } catch (error) {
     console.error('[YTS]', error)
 
