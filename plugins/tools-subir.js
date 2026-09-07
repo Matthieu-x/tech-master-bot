@@ -82,38 +82,52 @@ function crearArchivoTemporal(nombre) {
 }
 
 async function subirCatbox(buffer, nombre, mime) {
+  if (
+    typeof FormData === 'undefined' ||
+    typeof Blob === 'undefined' ||
+    typeof fetch === 'undefined'
+  ) {
+    throw new Error(
+      'Este servidor necesita Node.js 18 o superior'
+    )
+  }
+
   const form = new FormData()
 
-  form.append('reqtype', 'file')
+  form.append('reqtype', 'fileupload')
+
   form.append(
     'fileToUpload',
-    new Blob([buffer], { type: mime }),
+    new Blob([buffer], {
+      type: mime || 'application/octet-stream'
+    }),
     nombre
   )
 
   const response = await fetch(CATBOX_URL, {
     method: 'POST',
-    body: form
+    body: form,
+    headers: {
+      'User-Agent': 'Tech-Master-Bot/1.0'
+    }
   })
 
   const resultado = await response.text()
+  const url = resultado.trim()
 
   if (!response.ok) {
     throw new Error(
-      `Catbox HTTP ${response.status}: ${resultado}`
+      `Catbox HTTP ${response.status}: ${url || 'respuesta vacía'}`
     )
   }
 
-  if (
-    !resultado ||
-    !/^https?:\/\//i.test(resultado.trim())
-  ) {
+  if (!url || !/^https?:\/\//i.test(url)) {
     throw new Error(
-      `Catbox no devolvió una URL válida: ${resultado || 'respuesta vacía'}`
+      `Catbox no devolvió una URL válida: ${url || 'respuesta vacía'}`
     )
   }
 
-  return resultado.trim()
+  return url
 }
 
 let handler = async (m, { conn, usedPrefix }) => {
@@ -144,7 +158,8 @@ let handler = async (m, { conn, usedPrefix }) => {
         text:
           `☁️ *Subiendo archivo a Catbox...*\n\n` +
           `📦 Tipo: ${media.tipo}\n` +
-          `📄 Archivo: ${media.nombre}`
+          `📄 Archivo: ${media.nombre}\n` +
+          `⏳ Espera un momento...`
       },
       { quoted: m.raw }
     )
@@ -171,7 +186,10 @@ let handler = async (m, { conn, usedPrefix }) => {
       )
     }
 
-    fs.writeFileSync(archivoTemporal, buffer)
+    fs.writeFileSync(
+      archivoTemporal,
+      buffer
+    )
 
     const url = await subirCatbox(
       buffer,
@@ -185,12 +203,14 @@ let handler = async (m, { conn, usedPrefix }) => {
         text:
           `╭━━━〔 ☁️ CATBOX 〕━━━╮\n` +
           `┃\n` +
-          `┃ ✅ *Archivo subido*\n` +
+          `┃ ✅ *ARCHIVO SUBIDO*\n` +
           `┃\n` +
           `┃ 📦 Tipo: ${media.tipo}\n` +
           `┃ 📄 ${media.nombre}\n` +
+          `┃ 💾 Tamaño: ${(buffer.length / 1024 / 1024).toFixed(2)} MB\n` +
           `┃\n` +
-          `┃ 🔗 *URL directa:*\n` +
+          `┃ 🔗 *URL DIRECTA:*\n` +
+          `┃\n` +
           `┃ ${url}\n` +
           `┃\n` +
           `╰━━━━━━━━━━━━━━━━━━╯`
