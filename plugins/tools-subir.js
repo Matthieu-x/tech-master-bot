@@ -5,7 +5,7 @@ const path = require('path')
 const crypto = require('crypto')
 const pino = require('pino')
 
-const CATBOX_URL = 'https://catbox.moe/user/api.php'
+const UGUU_URL = 'https://uguu.se/upload'
 const MAX_SIZE = 200 * 1024 * 1024
 
 function obtenerMensajeConMedia(m) {
@@ -81,7 +81,7 @@ function crearArchivoTemporal(nombre) {
   )
 }
 
-async function subirCatbox(buffer, nombre, mime) {
+async function subirUguu(buffer, nombre, mime) {
   if (
     typeof FormData === 'undefined' ||
     typeof Blob === 'undefined' ||
@@ -94,17 +94,18 @@ async function subirCatbox(buffer, nombre, mime) {
 
   const form = new FormData()
 
-  form.append('reqtype', 'fileupload')
-
   form.append(
-    'fileToUpload',
-    new Blob([buffer], {
-      type: mime || 'application/octet-stream'
-    }),
+    'files[]',
+    new Blob(
+      [buffer],
+      {
+        type: mime || 'application/octet-stream'
+      }
+    ),
     nombre
   )
 
-  const response = await fetch(CATBOX_URL, {
+  const response = await fetch(UGUU_URL, {
     method: 'POST',
     body: form,
     headers: {
@@ -112,18 +113,36 @@ async function subirCatbox(buffer, nombre, mime) {
     }
   })
 
-  const resultado = await response.text()
-  const url = resultado.trim()
+  const texto = await response.text()
 
-  if (!response.ok) {
+  let data
+
+  try {
+    data = JSON.parse(texto)
+  } catch {
     throw new Error(
-      `Catbox HTTP ${response.status}: ${url || 'respuesta vacía'}`
+      `Uguu devolvió una respuesta inválida: ${texto || 'respuesta vacía'}`
     )
   }
 
-  if (!url || !/^https?:\/\//i.test(url)) {
+  if (!response.ok) {
     throw new Error(
-      `Catbox no devolvió una URL válida: ${url || 'respuesta vacía'}`
+      `Uguu HTTP ${response.status}: ${
+        data?.error ||
+        data?.message ||
+        texto ||
+        'error desconocido'
+      }`
+    )
+  }
+
+  const url = data?.files?.[0]?.url
+
+  if (!url) {
+    throw new Error(
+      data?.error ||
+      data?.message ||
+      'Uguu no devolvió una URL'
     )
   }
 
@@ -156,7 +175,7 @@ let handler = async (m, { conn, usedPrefix }) => {
       m.chat,
       {
         text:
-          `☁️ *Subiendo archivo a Catbox...*\n\n` +
+          `☁️ *Subiendo a Uguu...*\n\n` +
           `📦 Tipo: ${media.tipo}\n` +
           `📄 Archivo: ${media.nombre}\n` +
           `⏳ Espera un momento...`
@@ -191,7 +210,7 @@ let handler = async (m, { conn, usedPrefix }) => {
       buffer
     )
 
-    const url = await subirCatbox(
+    const url = await subirUguu(
       buffer,
       media.nombre,
       media.mime
@@ -201,7 +220,7 @@ let handler = async (m, { conn, usedPrefix }) => {
       m.chat,
       {
         text:
-          `╭━━━〔 ☁️ CATBOX 〕━━━╮\n` +
+          `╭━━━〔 ☁️ UGUU 〕━━━╮\n` +
           `┃\n` +
           `┃ ✅ *ARCHIVO SUBIDO*\n` +
           `┃\n` +
@@ -218,7 +237,7 @@ let handler = async (m, { conn, usedPrefix }) => {
       { quoted: m.raw }
     )
   } catch (error) {
-    console.error('[SUBIR]', error)
+    console.error('[SUBIR UGUU]', error)
 
     await conn.sendMessage(
       m.chat,
@@ -248,7 +267,7 @@ handler.tags = [
 
 handler.command = [
   'subir',
-  'catbox'
+  'uguu'
 ]
 
 handler.registro = true
