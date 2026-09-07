@@ -17,10 +17,7 @@ let handler = async (m, { conn, text, usedPrefix }) => {
 
   const tiktokUrl = text.trim()
 
-  if (
-    !tiktokUrl.includes('tiktok.com/') &&
-    !tiktokUrl.includes('vm.tiktok.com/')
-  ) {
+  if (!tiktokUrl.includes('tiktok.com')) {
     return conn.sendMessage(
       m.chat,
       {
@@ -34,9 +31,7 @@ let handler = async (m, { conn, text, usedPrefix }) => {
     await conn.sendMessage(
       m.chat,
       {
-        text:
-          `Descargando video de TikTok...\n\n` +
-          `Enlace: ${tiktokUrl}`
+        text: `Descargando video de TikTok...`
       },
       { quoted: m.raw }
     )
@@ -56,39 +51,44 @@ let handler = async (m, { conn, text, usedPrefix }) => {
     if (
       !data ||
       !data.status ||
-      !data.result
+      !data.result ||
+      !data.result.video
     ) {
-      throw new Error('La API no devolvió un resultado válido')
+      throw new Error('La API no devolvió información del video')
     }
 
     const result = data.result
 
-    const videoUrl =
-      result.video ||
-      result.download ||
-      result.url ||
-      result.videoUrl ||
-      result.play
+    const downloadAddr = result.video.downloadAddr
 
-    if (!videoUrl) {
-      throw new Error(
-        'La API no devolvió la URL directa del video'
-      )
+    if (
+      !Array.isArray(downloadAddr) ||
+      !downloadAddr.length
+    ) {
+      throw new Error('La API no devolvió el enlace de descarga')
     }
+
+    const videoUrl = downloadAddr[0]
+
+    const author = result.author || {}
+    const statistics = result.statistics || {}
 
     const caption =
       `╭━━━〔 TIKTOK 〕━━━╮\n` +
-      `┃ ID: ${result.id || 'Desconocido'}\n` +
-      `┃ Descripción: ${result.desc || 'Sin descripción'}\n` +
-      `┃ Comentarios: ${result.isTurnOffComment ? 'Desactivados' : 'Activados'}\n` +
-      `┃ Publicidad: ${result.isADS ? 'Sí' : 'No'}\n` +
-      `╰━━━━━━━━━━━━━━━━╯`
+      `┃ Usuario: ${author.nickname || 'Desconocido'}\n` +
+      `┃ Cuenta: @${author.uniqueId || 'Desconocido'}\n` +
+      `┃ Me gusta: ${statistics.likeCount || 0}\n` +
+      `┃ Reproducciones: ${statistics.playCount || 0}\n` +
+      `┃ Compartidos: ${statistics.shareCount || 0}\n` +
+      `╰━━━━━━━━━━━━━━━━╯\n\n` +
+      `${result.desc || 'Sin descripción'}`
 
     await conn.sendMessage(
       m.chat,
       {
-        video: { url: videoUrl },
+        video: videoUrl,
         mimetype: 'video/mp4',
+        fileName: `tiktok-${result.id || Date.now()}.mp4`,
         caption
       },
       { quoted: m.raw }
