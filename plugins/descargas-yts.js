@@ -1,21 +1,21 @@
 const { enviarLista } = require('../lib/botones')
 
-const API_KEY = 'lem_dc158e5ad3f4f6ee2de2905a222bfb68f61dd754'
-const API_URL = 'https://api.lempi.lat/s/youtube'
+const API_KEY = process.env.ORBIT_API_KEY || 'ORBIT-4096939993'
+const API_URL = 'https://api-orbit-9doj.onrender.com/api/v1/search'
 
 const TIEMPO_SELECCION_MS = 3 * 60 * 1000
 const MAX_RESULTADOS = 10
 
-// Los plugins se recargan (require.cache se limpia) en cada mensaje,
-// así que un Map normal del módulo se resetearía antes de que el
-// usuario llegue a tocar la lista. Usamos global para que sobreviva.
 if (!global.ytsBusquedasPendientes) global.ytsBusquedasPendientes = new Map()
 const busquedasPendientes = global.ytsBusquedasPendientes
 
 function limpiarBusquedasVencidas() {
   const ahora = Date.now()
+
   for (const [clave, valor] of busquedasPendientes) {
-    if (!valor || ahora > valor.expira) busquedasPendientes.delete(clave)
+    if (!valor || ahora > valor.expira) {
+      busquedasPendientes.delete(clave)
+    }
   }
 }
 
@@ -25,8 +25,8 @@ function claveBusqueda(m) {
 
 async function buscarEnYoutube(query) {
   const url =
-    `${API_URL}?query=${encodeURIComponent(query)}` +
-    `&apikey=${encodeURIComponent(API_KEY)}`
+    `${API_URL}?apikey=${encodeURIComponent(API_KEY)}` +
+    `&query=${encodeURIComponent(query)}`
 
   const response = await fetch(url)
 
@@ -38,28 +38,79 @@ async function buscarEnYoutube(query) {
 
   if (
     !data ||
-    !data.status ||
-    !data.datos ||
-    !data.datos.results ||
-    !Array.isArray(data.datos.results.videos)
+    data.status !== true ||
+    !Array.isArray(data.results)
   ) {
-    throw new Error('La API no devolvió resultados válidos')
+    throw new Error('La API de Orbit no devolvió resultados válidos')
   }
 
-  return data.datos.results.videos
+  return data.results
 }
 
 function construirDetalleVideo(video) {
+  const titulo = video.title || 'Sin título'
+  const autor = video.author || 'Desconocido'
+  const duracion = video.duration || 'Desconocida'
+  const vistas = video.views || 'Desconocidas'
+  const publicado = video.publishedAt || 'Desconocido'
+  const url = video.url || `https://www.youtube.com/watch?v=${video.videoId}`
+
   return (
     `╭━━━〔 🎬 YOUTUBE 〕━━━╮\n` +
-    `┃ 📌 Título: ${video.title || 'Sin título'}\n` +
-    `┃ 👤 Canal: ${video.channel || 'Desconocido'}\n` +
-    `┃ ⏱️ Duración: ${video.duration || 'Desconocida'}\n` +
-    `┃ 👁️ Vistas: ${video.views || 'Desconocidas'}\n` +
-    `┃ 📅 Publicado: ${video.published || 'Desconocido'}\n` +
+    `┃ 📌 Título: ${titulo}\n` +
+    `┃ 👤 Canal: ${autor}\n` +
+    `┃ ⏱️ Duración: ${duracion}\n` +
+    `┃ 👁️ Vistas: ${vistas}\n` +
+    `┃ 📅 Publicado: ${publicado}\n` +
     `╰━━━━━━━━━━━━━━━━━━━━╯\n\n` +
-    `🔗 ${video.url || 'Sin URL'}\n\n` +
-    `🤖 Powered by Lempi API`
+    `🔗 ${url}\n\n` +
+    `🆔 ID: ${video.videoId || 'Desconocido'}\n` +
+    `🌐 Orbit API`
+  )
+}
+
+async function enviarDetalle(conn, m, video) {
+  const titulo = video.title || 'Sin título'
+  const autor = video.author || 'Desconocido'
+  const duracion = video.duration || 'Desconocida'
+  const vistas = video.views || 'Desconocidas'
+  const publicado = video.publishedAt || 'Desconocido'
+  const url = video.url || `https://www.youtube.com/watch?v=${video.videoId}`
+
+  const texto =
+    `╭━━━〔 🎬 YOUTUBE 〕━━━╮\n` +
+    `┃ 📌 ${titulo}\n` +
+    `┃ 👤 ${autor}\n` +
+    `┃ ⏱️ ${duracion}\n` +
+    `┃ 👁️ ${vistas}\n` +
+    `┃ 📅 ${publicado}\n` +
+    `╰━━━━━━━━━━━━━━━━━━━━╯\n\n` +
+    `🔗 ${url}\n\n` +
+    `🤖 Orbit API`
+
+  if (video.thumbnail) {
+    try {
+      return await conn.sendMessage(
+        m.chat,
+        {
+          image: { url: video.thumbnail },
+          caption: texto
+        },
+        { quoted: m.raw }
+      )
+    } catch {
+      return conn.sendMessage(
+        m.chat,
+        { text: texto },
+        { quoted: m.raw }
+      )
+    }
+  }
+
+  return conn.sendMessage(
+    m.chat,
+    { text: texto },
+    { quoted: m.raw }
   )
 }
 
@@ -68,28 +119,31 @@ let handler = async (m, { conn, text, usedPrefix, command, args }) => {
 
   const comando = (command || '').toLowerCase()
 
-  // Se dispara al tocar una fila de la lista: "#ytsver <indice>"
   if (comando === 'ytsver') {
     const indice = Number(args[0])
     const clave = claveBusqueda(m)
     const pendiente = busquedasPendientes.get(clave)
 
-    if (!pendiente || Number.isNaN(indice) || !pendiente.videos[indice]) {
+    if (
+      !pendiente ||
+      Number.isNaN(indice) ||
+      !pendiente.videos[indice]
+    ) {
       return conn.sendMessage(
         m.chat,
         {
           text:
-            `❌ Esa búsqueda expiró o no es válida.\n` +
+            `❌ Esa búsqueda expiró o no es válida.\n\n` +
             `> Usa ${usedPrefix}yts de nuevo.`
         },
         { quoted: m.raw }
       )
     }
 
-    return conn.sendMessage(
-      m.chat,
-      { text: construirDetalleVideo(pendiente.videos[indice]) },
-      { quoted: m.raw }
+    return enviarDetalle(
+      conn,
+      m,
+      pendiente.videos[indice]
     )
   }
 
@@ -100,7 +154,7 @@ let handler = async (m, { conn, text, usedPrefix, command, args }) => {
         text:
           `❌ Escribe algo para buscar.\n\n` +
           `📌 Ejemplo:\n` +
-          `${usedPrefix}yts William Luna`
+          `${usedPrefix}yts Ozuna`
       },
       { quoted: m.raw }
     )
@@ -111,7 +165,11 @@ let handler = async (m, { conn, text, usedPrefix, command, args }) => {
   try {
     await conn.sendMessage(
       m.chat,
-      { text: `🔎 Buscando en YouTube...\n\n> ${query}` },
+      {
+        text:
+          `🔎 Buscando en YouTube...\n\n` +
+          `> ${query}`
+      },
       { quoted: m.raw }
     )
 
@@ -120,44 +178,64 @@ let handler = async (m, { conn, text, usedPrefix, command, args }) => {
     if (videos.length === 0) {
       return conn.sendMessage(
         m.chat,
-        { text: `❌ No encontré resultados para: ${query}` },
+        {
+          text:
+            `❌ No encontré resultados para:\n` +
+            `> ${query}`
+        },
         { quoted: m.raw }
       )
     }
 
-    const resultados = videos.slice(0, MAX_RESULTADOS)
+    const resultados = videos
+      .filter(video => video && video.videoId)
+      .slice(0, MAX_RESULTADOS)
+
+    if (resultados.length === 0) {
+      throw new Error('No se encontraron videos válidos')
+    }
+
     const clave = claveBusqueda(m)
 
     busquedasPendientes.set(clave, {
       videos: resultados,
-      expira: Date.now() + TIEMPO_SELECCION_MS,
+      expira: Date.now() + TIEMPO_SELECCION_MS
     })
 
     return enviarLista(conn, m.chat, {
-      texto: `🔎 *Resultados para:* ${query}`,
-      footer: 'Toca una opción para ver el detalle · expira en 3 min',
+      texto:
+        `🔎 *Resultados para:* ${query}\n\n` +
+        `🎬 Encontrados: ${resultados.length}`,
+      footer: 'Selecciona un video · expira en 3 min',
       titulo: 'YouTube Search',
       textoBoton: 'Ver resultados',
       mensajeCitado: m.raw,
       secciones: [
         {
           titulo: `${resultados.length} resultado(s)`,
-          filas: resultados.map((video, i) => ({
-            titulo: (video.title || 'Sin título').slice(0, 60),
-            id: `${usedPrefix}ytsver ${i}`,
-            descripcion: `${video.channel || 'Desconocido'} · ${video.duration || '?'}`,
-          })),
-        },
-      ],
+          filas: resultados.map((video, i) => {
+            const titulo = video.title || 'Sin título'
+            const autor = video.author || 'Desconocido'
+            const duracion = video.duration || '?'
+
+            return {
+              titulo: titulo.slice(0, 60),
+              id: `${usedPrefix}ytsver ${i}`,
+              descripcion:
+                `${autor.slice(0, 35)} · ${duracion}`
+            }
+          })
+        }
+      ]
     })
   } catch (error) {
     console.error('[YTS]', error)
 
-    await conn.sendMessage(
+    return conn.sendMessage(
       m.chat,
       {
         text:
-          `❌ Ocurrió un error al buscar.\n\n` +
+          `❌ Ocurrió un error al buscar en YouTube.\n\n` +
           `> ${error.message || 'Error desconocido'}`
       },
       { quoted: m.raw }
@@ -165,9 +243,19 @@ let handler = async (m, { conn, text, usedPrefix, command, args }) => {
   }
 }
 
-handler.help = ['yts <búsqueda>', 'ytsearch <búsqueda>']
+handler.help = [
+  'yts <búsqueda>',
+  'ytsearch <búsqueda>'
+]
+
 handler.tags = ['search']
-handler.command = ['yts', 'ytsearch', 'ytsver']
+
+handler.command = [
+  'yts',
+  'ytsearch',
+  'ytsver'
+]
+
 handler.registro = false
 
 module.exports = handler
