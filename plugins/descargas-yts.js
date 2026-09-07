@@ -25,12 +25,29 @@ function claveBusqueda(m) {
 }
 
 const TIEMPO_MAX_IMAGEN_MS = 15_000
+const TIEMPO_MAX_API_MS = 20_000
 
 function conTimeout(promesa, ms) {
   return Promise.race([
     promesa,
     new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms)),
   ])
+}
+
+async function fetchConTimeout(url, ms = TIEMPO_MAX_API_MS) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), ms)
+
+  try {
+    return await fetch(url, { signal: controller.signal })
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new Error(`La API tardó más de ${Math.floor(ms / 1000)} segundos en responder`)
+    }
+    throw error
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 function extraerVideoId(url) {
@@ -59,7 +76,7 @@ async function buscarEnYoutube(query) {
     `${API_URL_SEARCH}?query=${encodeURIComponent(query)}` +
     `&apikey=${encodeURIComponent(API_KEY)}`
 
-  const response = await fetch(url)
+  const response = await fetchConTimeout(url)
 
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}`)
@@ -85,7 +102,7 @@ async function descargarVideoYoutube(youtubeUrl) {
     `${API_URL_YTV}?url=${encodeURIComponent(youtubeUrl)}` +
     `&apikey=${encodeURIComponent(API_KEY)}`
 
-  const response = await fetch(apiUrl)
+  const response = await fetchConTimeout(apiUrl, 60_000)
 
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}`)
