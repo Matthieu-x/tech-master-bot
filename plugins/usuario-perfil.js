@@ -1,4 +1,11 @@
 const { obtenerUsuario, numeroDeSender } = require('../lib/db')
+const { generarTarjetaPerfil } = require('../lib/tarjetas')
+
+// Sin sistema de niveles todavía: se deriva un "nivel" visual a partir
+// del saldo de MasterCoins, solo para la tarjeta (no se guarda en la DB).
+function calcularNivel(mastercoins) {
+  return Math.floor((mastercoins || 0) / 200) + 1
+}
 
 let handler = async (m, { conn, usedPrefix }) => {
   const usuario = obtenerUsuario(m)
@@ -28,36 +35,56 @@ let handler = async (m, { conn, usedPrefix }) => {
     }
   }
 
-  const texto =
+  const mastercoins = usuario.mastercoins ?? 0
+  const nivel = calcularNivel(mastercoins)
+
+  const caption =
     `╭━━━〔 👤 MI PERFIL 〕━━━╮\n` +
     `┃\n` +
     `┃ 👤 Nombre: ${usuario.nombre || 'Sin nombre'}\n` +
     `┃ 🎂 Edad: ${usuario.edad || 'No especificada'}\n` +
     `┃ 📱 Número: +${numero || 'Desconocido'}\n` +
-    `┃ 🪙 MasterCoins: ${usuario.mastercoins ?? 0}\n` +
     `┃ 📅 Registro: ${fechaRegistro}\n` +
     `┃\n` +
     `╰━━━━━━━━━━━━━━━━━━╯\n\n` +
     `✨ Selecciona una opción:`
 
-  await conn.sendMessage(
-    m.chat,
-    {
-      text: texto,
-      footer: 'Tech Master Bot',
-      buttons: [
-        {
-          text: '📋 Menú',
-          id: `${usedPrefix}menu`
-        },
-        {
-          text: '🏓 Ping',
-          id: `${usedPrefix}ping`
-        }
-      ]
-    },
-    { quoted: m.raw }
-  )
+  const botones = [
+    { text: '📋 Menú', id: `${usedPrefix}menu` },
+    { text: '🏓 Ping', id: `${usedPrefix}ping` }
+  ]
+
+  try {
+    const tarjeta = await generarTarjetaPerfil({
+      conn,
+      jid: m.sender,
+      nombreUsuario: usuario.nombre || `+${numero}`,
+      mastercoins,
+      nivel,
+    })
+
+    await conn.sendMessage(
+      m.chat,
+      {
+        image: tarjeta,
+        caption,
+        footer: 'Tech Master Bot',
+        buttons: botones,
+      },
+      { quoted: m.raw }
+    )
+  } catch (e) {
+    console.log(`ꕥ\n> Error generando tarjeta de perfil: ${e.message}`)
+    await conn.sendMessage(
+      m.chat,
+      {
+        text: caption,
+        footer: 'Tech Master Bot',
+        buttons: botones,
+      },
+      { quoted: m.raw }
+    )
+  }
 }
 
 handler.help = ['perfil']
