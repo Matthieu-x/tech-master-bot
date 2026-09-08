@@ -1,4 +1,4 @@
-const API_KEY = 'lem_dc158e5ad3f4f6ee2de2905a222bfb68f61dd754'
+const API_KEY = 'lem_10b02e6bcce68b82f51252de9d9ec71125528d02'
 const API_URL = 'https://api.lempi.lat/dl/ytv'
 
 let handler = async (m, { conn, text, usedPrefix }) => {
