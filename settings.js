@@ -1,6 +1,8 @@
 global.botName = 'Tech Master Bot'
 
-global.prefix = /^[#!./]/
+// Acepta cualquiera de estos símbolos como prefijo, o directamente
+// ningún prefijo (el comando se reconoce igual escrito a secas).
+global.prefix = /^[#!.\/$%*+=?~^-]/
 
 global.owner = [
   ['584223342535', 'Matthieu'],
