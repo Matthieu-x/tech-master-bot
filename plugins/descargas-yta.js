@@ -7,8 +7,8 @@ let handler = async (m, { conn, text, usedPrefix }) => {
       m.chat,
       {
         text:
-          `❌ *Falta el enlace de YouTube*\n\n` +
-          `📌 Ejemplo:\n` +
+          `Falta el enlace de YouTube\n\n` +
+          `Ejemplo:\n` +
           `${usedPrefix}yta https://www.youtube.com/watch?v=8QkY_PDfAlE`
       },
       { quoted: m.raw }
@@ -24,9 +24,7 @@ let handler = async (m, { conn, text, usedPrefix }) => {
     return conn.sendMessage(
       m.chat,
       {
-        text:
-          `❌ *Enlace inválido*\n\n` +
-          `> Envía un enlace válido de YouTube.`
+        text: `Enlace invalido\n\n> Envia un enlace valido de YouTube.`
       },
       { quoted: m.raw }
     )
@@ -36,9 +34,7 @@ let handler = async (m, { conn, text, usedPrefix }) => {
     await conn.sendMessage(
       m.chat,
       {
-        text:
-          `🎵 *Descargando audio...*\n\n` +
-          `> Espera un momento mientras proceso el video.`
+        text: `Descargando audio...\n\n> Espera un momento mientras proceso el video.`
       },
       { quoted: m.raw }
     )
@@ -55,17 +51,20 @@ let handler = async (m, { conn, text, usedPrefix }) => {
 
     const data = await response.json()
 
-    // ✅ CORRECCIÓN: Los datos están en la raíz, no en data.result
     if (
       !data ||
       data.status !== true ||
       !data.download_url
     ) {
-      throw new Error('Orbit no devolvió un enlace de descarga válido')
+      throw new Error('Orbit no devolvio un enlace de descarga valido')
     }
 
     const audioUrl = data.download_url
     const title = data.title || 'Audio de YouTube'
+    const thumbnail = data.thumbnail || `https://i.ytimg.com/vi/${extractVideoId(youtubeUrl)}/hqdefault.jpg`
+    const duration = data.duration || 0
+    const minutes = Math.floor(duration / 60)
+    const seconds = String(duration % 60).padStart(2, '0')
 
     const filename =
       `${title}`
@@ -74,19 +73,21 @@ let handler = async (m, { conn, text, usedPrefix }) => {
         .trim()
         .slice(0, 100) + '.mp3'
 
-    // Opcional: Enviar información del audio
+    // Enviar información con miniatura
     await conn.sendMessage(
       m.chat,
       {
-        text:
-          `✅ *Audio descargado*\n\n` +
-          `📌 *Título:* ${title}\n` +
-          `⏱️ *Duración:* ${data.duration ? Math.floor(data.duration / 60) + ':' + String(data.duration % 60).padStart(2, '0') : 'N/A'}\n` +
-          `🎵 *Formato:* ${data.format || 'mp3'}`
+        image: { url: thumbnail },
+        caption:
+          `Titulo: ${title}\n` +
+          `Duracion: ${minutes}:${seconds}\n` +
+          `Formato: ${data.format || 'mp3'}\n\n` +
+          `Enviando audio...`
       },
       { quoted: m.raw }
     )
 
+    // Enviar el audio
     await conn.sendMessage(
       m.chat,
       {
@@ -104,12 +105,18 @@ let handler = async (m, { conn, text, usedPrefix }) => {
       m.chat,
       {
         text:
-          `❌ *No se pudo descargar el audio*\n\n` +
+          `No se pudo descargar el audio\n\n` +
           `> ${error.message || 'Error desconocido'}`
       },
       { quoted: m.raw }
     )
   }
+}
+
+// Función auxiliar para extraer el ID del video
+function extractVideoId(url) {
+  const match = url.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/)
+  return match ? match[1] : ''
 }
 
 handler.help = ['yta <url>', 'ytaudio <url>']
