@@ -34,7 +34,7 @@ let handler = async (m, { conn, text, usedPrefix }) => {
     await conn.sendMessage(
       m.chat,
       {
-        text: `Descargando audio...\n\n> Espera un momento mientras proceso el video.`
+        text: `Descargando audio...\n\n> Espera un momento mientras proceso el audio.`
       },
       { quoted: m.raw }
     )
