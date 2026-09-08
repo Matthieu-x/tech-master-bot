@@ -41,10 +41,13 @@ async function handler(conn, m) {
 
   if (!m.text) return
 
-  const usedPrefix = (m.text.match(prefix) || [])[0]
-  if (!usedPrefix) return
+  // Acepta cualquiera de los símbolos definidos en settings.js como
+  // prefijo, y si el mensaje no trae ninguno, igual se intenta
+  // reconocer el comando a secas (usedPrefix queda como '').
+  const coincidenciaPrefijo = m.text.match(prefix)
+  const usedPrefix = coincidenciaPrefijo ? coincidenciaPrefijo[0] : ''
+  const sinPrefijo = usedPrefix ? m.text.slice(usedPrefix.length).trim() : m.text.trim()
 
-  const sinPrefijo = m.text.slice(usedPrefix.length).trim()
   const [command, ...args] = sinPrefijo.split(/\s+/)
   const text = sinPrefijo.slice(command.length).trim()
 
