@@ -55,18 +55,17 @@ let handler = async (m, { conn, text, usedPrefix }) => {
 
     const data = await response.json()
 
+    // ✅ CORRECCIÓN: Los datos están en la raíz, no en data.result
     if (
       !data ||
       data.status !== true ||
-      !data.result ||
-      !data.result.download_url
+      !data.download_url
     ) {
       throw new Error('Orbit no devolvió un enlace de descarga válido')
     }
 
-    const result = data.result
-    const audioUrl = result.download_url
-    const title = result.title || 'Audio de YouTube'
+    const audioUrl = data.download_url
+    const title = data.title || 'Audio de YouTube'
 
     const filename =
       `${title}`
@@ -74,6 +73,19 @@ let handler = async (m, { conn, text, usedPrefix }) => {
         .replace(/\s+/g, ' ')
         .trim()
         .slice(0, 100) + '.mp3'
+
+    // Opcional: Enviar información del audio
+    await conn.sendMessage(
+      m.chat,
+      {
+        text:
+          `✅ *Audio descargado*\n\n` +
+          `📌 *Título:* ${title}\n` +
+          `⏱️ *Duración:* ${data.duration ? Math.floor(data.duration / 60) + ':' + String(data.duration % 60).padStart(2, '0') : 'N/A'}\n` +
+          `🎵 *Formato:* ${data.format || 'mp3'}`
+      },
+      { quoted: m.raw }
+    )
 
     await conn.sendMessage(
       m.chat,
@@ -100,18 +112,9 @@ let handler = async (m, { conn, text, usedPrefix }) => {
   }
 }
 
-handler.help = [
-  'yta <url>',
-  'ytaudio <url>'
-]
-
+handler.help = ['yta <url>', 'ytaudio <url>']
 handler.tags = ['downloader']
-
-handler.command = [
-  'yta',
-  'ytaudio'
-]
-
+handler.command = ['yta', 'ytaudio']
 handler.registro = true
 
 module.exports = handler
