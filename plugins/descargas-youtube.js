@@ -1,30 +1,35 @@
-const API_KEY = 'lem_10b02e6bcce68b82f51252de9d9ec71125528d02'
 const API_URL = 'https://api.lempi.lat/dl/ytv'
+const API_KEY = 'lem_10b02e6bcce68b82f51252de9d9ec71125528d02'
 
 let handler = async (m, { conn, text, usedPrefix }) => {
-  if (!text || !text.trim()) {
+  if (!text) {
     return conn.sendMessage(
       m.chat,
       {
         text:
-          `❌ Debes enviar un enlace de YouTube.\n\n` +
-          `📌 Ejemplo:\n` +
-          `${usedPrefix}ytv https://www.youtube.com/watch?v=ZFG0mHN-BNA`
+          `❌ *Falta el enlace de YouTube*\n\n` +
+          `📌 Uso:\n` +
+          `${usedPrefix}ytv <url>\n\n` +
+          `📝 Ejemplo:\n` +
+          `${usedPrefix}ytv https://youtu.be/h_qaIfL9-UU`
       },
       { quoted: m.raw }
     )
   }
 
-  const youtubeUrl = text.trim()
+  const url = text.trim()
 
   if (
-    !youtubeUrl.includes('youtube.com/') &&
-    !youtubeUrl.includes('youtu.be/')
+    !/^https?:\/\/(?:www\.)?(?:youtube\.com\/|youtu\.be\/)/i.test(url)
   ) {
     return conn.sendMessage(
       m.chat,
       {
-        text: `❌ El enlace no parece ser un enlace válido de YouTube.`
+        text:
+          `❌ *Enlace de YouTube inválido*\n\n` +
+          `Solo se aceptan enlaces de:\n` +
+          `• youtube.com\n` +
+          `• youtu.be`
       },
       { quoted: m.raw }
     )
@@ -34,57 +39,81 @@ let handler = async (m, { conn, text, usedPrefix }) => {
     await conn.sendMessage(
       m.chat,
       {
-        text: `⏳ Descargando video...\n\n🔗 ${youtubeUrl}`
+        text:
+          `🎬 *DESCARGANDO VIDEO*\n\n` +
+          `🔗 YouTube detectado\n` +
+          `⏳ Procesando el video...\n\n` +
+          `⚡ Espera un momento...`
       },
       { quoted: m.raw }
     )
 
-    const apiUrl =
-      `${API_URL}?url=${encodeURIComponent(youtubeUrl)}` +
+    const endpoint =
+      `${API_URL}?url=${encodeURIComponent(url)}` +
       `&apikey=${encodeURIComponent(API_KEY)}`
 
-    const response = await fetch(apiUrl)
+    const response = await fetch(endpoint, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'Tech-Master-Bot/1.0'
+      }
+    })
 
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`)
+      throw new Error(`API HTTP ${response.status}`)
     }
 
     const data = await response.json()
 
     if (
-      !data ||
       !data.status ||
       !data.datos ||
       !data.datos.url
     ) {
-      throw new Error('La API no devolvió el enlace de descarga')
+      throw new Error(
+        'La API no devolvió un video válido'
+      )
     }
 
     const videoUrl = data.datos.url
-    const filename =
-      data.datos.archivo ||
-      `${data.titulo || 'youtube'}.mp4`
+
+    if (!/^https?:\/\//i.test(videoUrl)) {
+      throw new Error(
+        'La URL del video no es válida'
+      )
+    }
 
     const caption =
       `╭━━━〔 🎬 YOUTUBE VIDEO 〕━━━╮\n` +
-      `┃ 🎵 ${data.titulo || 'Sin título'}\n` +
-      `┃ 👤 ${data.canal || 'Desconocido'}\n` +
-      `┃ ⏱️ ${data.duracion || 'Desconocida'}\n` +
+      `┃\n` +
+      `┃ 🎵 *${data.titulo || 'Video de YouTube'}*\n` +
+      `┃\n` +
+      `┃ 📺 Canal: ${data.canal || 'Desconocido'}\n` +
+      `┃ ⏱️ Duración: ${data.duracion || 'Desconocida'}\n` +
       `┃ 🎞️ Calidad: ${data.datos.calidad || 'Desconocida'}\n` +
       `┃ 💾 Tamaño: ${data.datos.tamaño || 'Desconocido'}\n` +
-      `╰━━━━━━━━━━━━━━━━━━━━━━╯`
+      `┃ 📁 Formato: ${data.datos.extension || '.mp4'}\n` +
+      `┃\n` +
+      `┃ ⚡ *Descargado con Lempi API*\n` +
+      `┃\n` +
+      `╰━━━━━━━━━━━━━━━━━━━━╯`
 
     await conn.sendMessage(
       m.chat,
       {
-        video: { url: videoUrl },
+        video: {
+          url: videoUrl
+        },
         mimetype: 'video/mp4',
-        fileName: filename,
-        caption
+        fileName:
+          data.datos.archivo ||
+          'youtube-video.mp4',
+        caption,
+        ptt: false
       },
       { quoted: m.raw }
     )
-
   } catch (error) {
     console.error('[YTV]', error)
 
@@ -92,17 +121,27 @@ let handler = async (m, { conn, text, usedPrefix }) => {
       m.chat,
       {
         text:
-          `❌ No se pudo descargar el video.\n\n` +
-          `> ${error.message || 'Error desconocido'}`
+          `❌ *Error descargando el video*\n\n` +
+          `> ${error.message || 'Error desconocido'}\n\n` +
+          `💡 La API puede estar temporalmente caída o el video no estar disponible.`
       },
       { quoted: m.raw }
     )
   }
 }
 
-handler.help = ['ytv <url>']
-handler.tags = ['downloader']
-handler.command = ['ytv', 'ytvideo']
+handler.help = [
+  'ytv <url>'
+]
+
+handler.tags = [
+  'descargas'
+]
+
+handler.command = [
+  'ytv'
+]
+
 handler.registro = true
 
 module.exports = handler
