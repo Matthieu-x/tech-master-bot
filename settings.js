@@ -33,6 +33,14 @@ global.autoUpdateSecreto = 'cambia-esto-por-un-secreto-largo'
 
 global.autoUpdateRama = 'main'
 
+// Datos de tu cuenta en https://api-orbit-9doj.onrender.com
+// Rellena estos 2 datos con el correo y contraseña de TU cuenta de Orbit
+// (la misma con la que entras al dashboard). Esto es lo unico que hay
+// que cambiar para que el bot se registre solo y no vuelva a dar error 403.
+global.orbitUrl = 'https://api-orbit-9doj.onrender.com'
+global.orbitEmail = 'matthieu-x@admin.orbit'
+global.orbitPassword = 'Orbit2026'
+
 module.exports = {
   botName: global.botName,
   prefix: global.prefix,
@@ -43,4 +51,7 @@ module.exports = {
   autoUpdatePuerto: global.autoUpdatePuerto,
   autoUpdateSecreto: global.autoUpdateSecreto,
   autoUpdateRama: global.autoUpdateRama,
+  orbitUrl: global.orbitUrl,
+  orbitEmail: global.orbitEmail,
+  orbitPassword: global.orbitPassword,
 }
