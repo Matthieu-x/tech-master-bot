@@ -10,7 +10,7 @@ let handler = async (m, { conn, text, usedPrefix }) => {
         text:
           `Debes escribir algo para buscar en Pinterest.\n\n` +
           `Ejemplo:\n` +
-          `${usedPrefix}pinterest Goku`
+          `${usedPrefix}pinterest Goku black`
       },
       { quoted: m.raw }
     )
