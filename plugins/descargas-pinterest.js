@@ -1,5 +1,6 @@
-const API_KEY = 'ORBIT-3540596307'
+const API_KEY = 'ORBIT-4096939993'
 const API_URL = 'https://api-orbit-9doj.onrender.com/api/v1/pinterest'
+const IP = '186.2.144.215' 
 
 let handler = async (m, { conn, text, usedPrefix }) => {
   if (!text || !text.trim()) {
@@ -32,7 +33,9 @@ let handler = async (m, { conn, text, usedPrefix }) => {
       `${API_URL}?apikey=${encodeURIComponent(API_KEY)}` +
       `&query=${encodeURIComponent(query)}`
 
-    const response = await fetch(apiUrl)
+    const response = await fetch(apiUrl, {
+      headers: { 'X-Orbit-IP': IP }
+    })
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`)
