@@ -20,6 +20,11 @@ const { manejarParticipantes } = require('./lib/welcome')
 const { serializarMensaje } = require('./lib/serializar')
 const { reconectarSubbotsGuardados, registrarActividadGrupoPrincipal } = require('./lib/subbots')
 const { logMensaje, logError } = require('./lib/logger')
+const { registrarIpOrbit } = require('./lib/registrar-ip')
+
+// Se ejecuta una vez al arrancar el bot: le avisa a Orbit API cuál es la
+// IP del VPS para que el comando .yts (y otros) no den error 403.
+registrarIpOrbit()
 
 function preguntar(texto) {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
