@@ -9,6 +9,14 @@ const MAX_RESULTADOS = 10
 
 global.animeBusquedasPendientes = global.animeBusquedasPendientes || new Map()
 
+async function responder(conn, m, texto) {
+  return conn.sendMessage(
+    m.chat,
+    { text: texto },
+    { quoted: m.raw }
+  )
+}
+
 async function orbitRequest(params) {
   const url = new URL(API_BASE)
 
@@ -31,7 +39,11 @@ async function orbitRequest(params) {
   const data = await response.json()
 
   if (!data || data.status === false) {
-    throw new Error(data?.message || data?.error || 'La API devolvió un error')
+    throw new Error(
+      data?.message ||
+      data?.error ||
+      'La API devolvió un error'
+    )
   }
 
   return data
@@ -91,11 +103,23 @@ function limpiarNombre(nombre) {
 }
 
 async function enviarResultadosAnime(conn, m, resultados) {
-  const filas = resultados.slice(0, MAX_RESULTADOS).map((anime, index) => ({
-    title: anime.title || anime.name || `Anime ${index + 1}`,
-    description: anime.description || anime.type || 'Anime',
-    id: String(anime.id || anime.animeId || index)
-  }))
+  const filas = resultados
+    .slice(0, MAX_RESULTADOS)
+    .map((anime, index) => ({
+      title:
+        anime.title ||
+        anime.name ||
+        `Anime ${index + 1}`,
+      description:
+        anime.description ||
+        anime.type ||
+        'Anime',
+      id: String(
+        anime.id ||
+        anime.animeId ||
+        index
+      )
+    }))
 
   await enviarLista(
     conn,
@@ -109,18 +133,31 @@ async function enviarResultadosAnime(conn, m, resultados) {
 }
 
 async function enviarEpisodios(conn, m, pendiente) {
-  const episodios = await obtenerEpisodios(pendiente.animeId)
+  const episodios = await obtenerEpisodios(
+    pendiente.animeId
+  )
 
   if (!episodios.length) {
-    throw new Error('No se encontraron episodios para este anime')
+    throw new Error(
+      'No se encontraron episodios para este anime'
+    )
   }
 
   pendiente.episodios = episodios
 
   const filas = episodios.map((episodio, index) => ({
-    title: episodio.name || episodio.title || `Episodio ${index + 1}`,
-    description: episodio.description || `Episodio ${index + 1}`,
-    id: String(episodio.id || episodio.episodeId || index)
+    title:
+      episodio.name ||
+      episodio.title ||
+      `Episodio ${index + 1}`,
+    description:
+      episodio.description ||
+      `Episodio ${index + 1}`,
+    id: String(
+      episodio.id ||
+      episodio.episodeId ||
+      index
+    )
   }))
 
   await enviarLista(
@@ -138,9 +175,14 @@ let handler = async (m, { conn, text, command }) => {
   try {
     const input = String(text || '').trim()
 
-    if (command === 'anime' || command === 'animesearch') {
+    if (
+      command === 'anime' ||
+      command === 'animesearch'
+    ) {
       if (!input) {
-        return m.reply(
+        return responder(
+          conn,
+          m,
           'ꕥ Escribe el nombre del anime.\n\n> Ejemplo: .anime Naruto'
         )
       }
@@ -148,7 +190,11 @@ let handler = async (m, { conn, text, command }) => {
       const resultados = await buscarAnime(input)
 
       if (!resultados.length) {
-        return m.reply('ꕥ No encontré resultados para ese anime.')
+        return responder(
+          conn,
+          m,
+          'ꕥ No encontré resultados para ese anime.'
+        )
       }
 
       const key = `${m.chat}:${m.sender}`
@@ -159,49 +205,73 @@ let handler = async (m, { conn, text, command }) => {
       })
 
       setTimeout(() => {
-        const pendiente = animeBusquedasPendientes.get(key)
+        const pendiente =
+          animeBusquedasPendientes.get(key)
 
         if (
           pendiente &&
-          Date.now() - pendiente.creadoEn >= TIEMPO_SELECCION_MS
+          Date.now() - pendiente.creadoEn >=
+            TIEMPO_SELECCION_MS
         ) {
           animeBusquedasPendientes.delete(key)
         }
       }, TIEMPO_SELECCION_MS)
 
-      return await enviarResultadosAnime(conn, m, resultados)
+      return enviarResultadosAnime(
+        conn,
+        m,
+        resultados
+      )
     }
 
     if (command === 'animeep') {
       if (!input) {
-        return m.reply(
+        return responder(
+          conn,
+          m,
           'ꕥ Usa el ID del anime.\n\n> Ejemplo: .animeep 123'
         )
       }
 
       const key = `${m.chat}:${m.sender}`
 
-      const pendiente = animeBusquedasPendientes.get(key)
+      const pendiente =
+        animeBusquedasPendientes.get(key)
 
       if (!pendiente) {
-        return m.reply(
+        return responder(
+          conn,
+          m,
           'ꕥ No hay una búsqueda de anime activa o ya expiró.'
         )
       }
 
       const anime =
         pendiente.resultados.find(
-          x => String(x.id || x.animeId) === input
+          x =>
+            String(
+              x.id ||
+              x.animeId
+            ) === input
         ) ||
-        pendiente.resultados[Number(input)]
+        pendiente.resultados[
+          Number(input)
+        ]
 
       if (!anime) {
-        return m.reply('ꕥ No encontré ese anime en la búsqueda.')
+        return responder(
+          conn,
+          m,
+          'ꕥ No encontré ese anime en la búsqueda.'
+        )
       }
 
-      const animeId = anime.id || anime.animeId
+      const animeId =
+        anime.id ||
+        anime.animeId
 
       pendiente.animeId = animeId
+
       pendiente.animeTitulo =
         anime.title ||
         anime.name ||
@@ -209,64 +279,104 @@ let handler = async (m, { conn, text, command }) => {
 
       pendiente.creadoEn = Date.now()
 
-      return await enviarEpisodios(conn, m, pendiente)
+      return enviarEpisodios(
+        conn,
+        m,
+        pendiente
+      )
     }
 
     if (command === 'animedl') {
       if (!input) {
-        return m.reply(
+        return responder(
+          conn,
+          m,
           'ꕥ Usa el ID del episodio.\n\n> Ejemplo: .animedl 123'
         )
       }
 
       const key = `${m.chat}:${m.sender}`
 
-      const pendiente = animeBusquedasPendientes.get(key)
+      const pendiente =
+        animeBusquedasPendientes.get(key)
 
       if (!pendiente) {
-        return m.reply(
+        return responder(
+          conn,
+          m,
           'ꕥ No hay una selección de anime activa o ya expiró.'
         )
       }
 
-      if (!pendiente.episodios?.length) {
-        return m.reply(
+      if (
+        !pendiente.episodios ||
+        !pendiente.episodios.length
+      ) {
+        return responder(
+          conn,
+          m,
           'ꕥ Primero selecciona un anime para cargar sus episodios.'
         )
       }
 
       const episodio =
         pendiente.episodios.find(
-          x => String(x.id || x.episodeId) === input
+          x =>
+            String(
+              x.id ||
+              x.episodeId
+            ) === input
         ) ||
-        pendiente.episodios[Number(input)]
+        pendiente.episodios[
+          Number(input)
+        ]
 
       if (!episodio) {
-        return m.reply('ꕥ No encontré ese episodio.')
+        return responder(
+          conn,
+          m,
+          'ꕥ No encontré ese episodio.'
+        )
       }
 
-      const episodioId = episodio.id || episodio.episodeId
+      const episodioId =
+        episodio.id ||
+        episodio.episodeId
 
-      await m.reply(
-        `ꕥ Preparando el episodio...\n> ✐ ${episodio.name || episodio.title || 'Episodio'}`
+      await responder(
+        conn,
+        m,
+        `ꕥ Preparando el episodio...\n> ✐ ${
+          episodio.name ||
+          episodio.title ||
+          'Episodio'
+        }`
       )
 
-      const videoUrl = await obtenerVideo(episodioId)
+      const videoUrl =
+        await obtenerVideo(episodioId)
 
       if (
         typeof videoUrl !== 'string' ||
         !videoUrl.trim() ||
         !/^https?:\/\//i.test(videoUrl)
       ) {
-        throw new Error('La API devolvió un enlace de video inválido')
+        throw new Error(
+          'La API devolvió un enlace de video inválido'
+        )
       }
 
-      const titulo = limpiarNombre(pendiente.animeTitulo)
-      const nombreEpisodio = limpiarNombre(
-        episodio.name ||
-        episodio.title ||
-        `Episodio ${episodioId}`
-      )
+      const titulo =
+        limpiarNombre(
+          pendiente.animeTitulo
+        )
+
+      const nombreEpisodio =
+        limpiarNombre(
+          episodio.name ||
+          episodio.title ||
+          `Episodio ${episodioId}`
+        )
 
       await conn.sendMessage(
         m.chat,
@@ -275,8 +385,15 @@ let handler = async (m, { conn, text, command }) => {
             url: videoUrl
           },
           mimetype: 'video/mp4',
-          fileName: `${titulo} - ${nombreEpisodio}.mp4`,
-          caption: `ꕥ *${pendiente.animeTitulo}*\n> ✐ ${episodio.name || episodio.title || 'Episodio'}`
+          fileName:
+            `${titulo} - ${nombreEpisodio}.mp4`,
+          caption:
+            `ꕥ *${pendiente.animeTitulo}*\n` +
+            `> ✐ ${
+              episodio.name ||
+              episodio.title ||
+              'Episodio'
+            }`
         },
         {
           quoted: m.raw
@@ -287,21 +404,36 @@ let handler = async (m, { conn, text, command }) => {
     }
 
   } catch (error) {
-    console.error('ERROR ANIME:', error)
+    console.error(
+      'ERROR ANIME:',
+      error
+    )
 
-    let mensaje = error?.message || 'Error desconocido'
+    let mensaje =
+      error?.message ||
+      'Error desconocido'
 
-    if (mensaje.includes('Unknown system error -122')) {
+    if (
+      mensaje.includes(
+        'Unknown system error -122'
+      )
+    ) {
       mensaje =
         'El sistema no pudo escribir el archivo. El almacenamiento o la cuota del servidor puede estar agotada.'
     }
 
-    if (mensaje.includes('fetch failed')) {
+    if (
+      mensaje.includes(
+        'fetch failed'
+      )
+    ) {
       mensaje =
         'No se pudo conectar con la API de anime o con el servidor del video.'
     }
 
-    return m.reply(
+    return responder(
+      conn,
+      m,
       `ꕥ *Ocurrió un error ejecutando el comando:*\n> ${mensaje}`
     )
   }
@@ -320,6 +452,8 @@ handler.help = [
   'animedl <id>'
 ]
 
-handler.tags = ['anime']
+handler.tags = [
+  'anime'
+]
 
 module.exports = handler
