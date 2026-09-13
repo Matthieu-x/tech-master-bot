@@ -50,44 +50,50 @@ async function buscarStickers(query) {
   return data.results
 }
 
-/**
- * Descarga el GIF y lo convierte a WebP animado con sharp
- * Tamaño correcto para WhatsApp: 512x512
- */
 async function convertirAWebp(gifUrl) {
   const res = await fetch(gifUrl)
   if (!res.ok) throw new Error(`Fallo descarga: HTTP ${res.status}`)
 
   const buffer = Buffer.from(await res.arrayBuffer())
 
-  return sharp(buffer, { animated: true })
+  return sharp(buffer, { animated: true, pages: -1 })
     .resize(512, 512, {
       fit: 'contain',
       background: { r: 0, g: 0, b: 0, alpha: 0 }
     })
-    .webp({
-      quality: 80,
-      effort: 4,
-      loop: 0
-    })
+    .webp({ quality: 80, effort: 4, loop: 0 })
     .toBuffer()
 }
 
 async function enviarListaStickers(conn, m, stickers, usedPrefix, query) {
   return enviarLista(conn, m.chat, {
-    texto: `🔎 *Stickers para:* ${query}\n\n🎨 Encontrados: ${stickers.length}`,
-    footer: 'Selecciona uno · expira en 3 minutos',
+    texto:
+      `🔎 *Stickers para:* ${query}\n\n` +
+      `🎨 Encontrados: ${stickers.length}`,
+    footer: 'Selecciona uno o envía el pack · expira en 3 min',
     titulo: 'Sticker Search',
     textoBoton: 'Ver stickers',
     mensajeCitado: m.raw,
-    secciones: [{
-      titulo: `${stickers.length} resultado(s)`,
-      filas: stickers.map((s, i) => ({
-        titulo: (s.title || 'Sticker').slice(0, 60),
-        id: `${usedPrefix}stickerget ${i}`,
-        descripcion: 'Toca para enviarlo'
-      }))
-    }]
+    secciones: [
+      {
+        titulo: `${stickers.length} resultado(s)`,
+        filas: stickers.map((s, i) => ({
+          titulo: (s.title || 'Sticker').slice(0, 60),
+          id: `${usedPrefix}stickerget ${i}`,
+          descripcion: 'Toca para enviarlo'
+        }))
+      },
+      {
+        titulo: 'Pack',
+        filas: [
+          {
+            titulo: `Enviar los primeros ${MAX_PACK}`,
+            id: `${usedPrefix}stickerpack`,
+            descripcion: 'Envía varios stickers seguidos'
+          }
+        ]
+      }
+    ]
   })
 }
 
@@ -97,7 +103,7 @@ let handler = async (m, { conn, text, usedPrefix, command, args }) => {
   const comando = (command || '').toLowerCase()
   const clave = claveBusqueda(m)
 
-  // ── Enviar un sticker individual (con sharp) ──
+  // ── Enviar un sticker individual ──
   if (comando === 'stickerget') {
     const indice = Number(args[0])
     const pendiente = busquedasPendientes.get(clave)
@@ -111,11 +117,16 @@ let handler = async (m, { conn, text, usedPrefix, command, args }) => {
     const sticker = pendiente.stickers[indice]
 
     try {
+      await conn.sendMessage(m.chat, {
+        text: `🎨 *_Enviando "${sticker.title}"..._*`
+      }, { quoted: m.raw })
+
       const webp = await convertirAWebp(sticker.image)
 
       await conn.sendMessage(m.chat, {
         sticker: webp
       }, { quoted: m.raw })
+
       return
     } catch (e) {
       console.error('[STICKER]', e)
@@ -125,7 +136,7 @@ let handler = async (m, { conn, text, usedPrefix, command, args }) => {
     }
   }
 
-  // ── Enviar pack (varios seguidos, con sharp) ──
+  // ── Enviar pack de 5 ──
   if (comando === 'stickerpack') {
     const pendiente = busquedasPendientes.get(clave)
 
@@ -180,13 +191,17 @@ let handler = async (m, { conn, text, usedPrefix, command, args }) => {
     }, { quoted: m.raw })
 
     const stickers = await buscarStickers(query)
+
     if (!stickers.length) {
       return conn.sendMessage(m.chat, {
         text: `❌ No encontré stickers para:\n> ${query}`
       }, { quoted: m.raw })
     }
 
-    const resultados = stickers.filter(s => s?.image && s?.title).slice(0, MAX_RESULTADOS)
+    const resultados = stickers
+      .filter(s => s?.image && s?.title)
+      .slice(0, MAX_RESULTADOS)
+
     if (!resultados.length) throw new Error('No hay stickers válidos')
 
     busquedasPendientes.set(clave, {
