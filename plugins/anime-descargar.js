@@ -1,7 +1,7 @@
 const { enviarLista } = require('../lib/botones')
 
 const API_KEY = process.env.ORBIT_API_KEY || 'ORBIT-4096939993'
-const API_BASE = 'https://api-orbit-9doj.onrender.com/api/v1/anime'
+const API_BASE = 'https://orbit-cloud.onrender.com/api/v1/anime'
 const ORBIT_IP = process.env.ORBIT_IP || '10.25.121.79'
 
 const TIEMPO_SELECCION_MS = 3 * 60 * 1000
