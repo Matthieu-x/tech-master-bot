@@ -7,42 +7,46 @@ const ORBIT_IP = process.env.ORBIT_IP || '10.25.121.79'
 const TIEMPO_SELECCION_MS = 3 * 60 * 1000
 const MAX_RESULTADOS = 10
 
-global.animeBusquedasPendientes = global.animeBusquedasPendientes || new Map()
-
-async function responder(conn, m, texto) {
-  return conn.sendMessage(
-    m.chat,
-    { text: texto },
-    { quoted: m.raw }
-  )
+if (!global.animeBusquedasPendientes) {
+  global.animeBusquedasPendientes = new Map()
 }
 
-async function orbitRequest(params) {
-  const url = new URL(API_BASE)
+const busquedasPendientes = global.animeBusquedasPendientes
 
-  for (const [key, value] of Object.entries(params)) {
-    url.searchParams.set(key, value)
+function limpiarBusquedasVencidas() {
+  const ahora = Date.now()
+
+  for (const [clave, valor] of busquedasPendientes) {
+    if (!valor || ahora > valor.expira) {
+      busquedasPendientes.delete(clave)
+    }
   }
+}
 
-  const response = await fetch(url.toString(), {
+function claveBusqueda(m) {
+  return `${m.chat}_${m.senderNumero || m.sender}`
+}
+
+async function llamarOrbit(ruta, query) {
+  const url =
+    `${API_BASE}/${ruta}?apikey=${encodeURIComponent(API_KEY)}` +
+    `&${query}`
+
+  const response = await fetch(url, {
     headers: {
-      'x-api-key': API_KEY,
-      'x-orbit-ip': ORBIT_IP,
-      'Accept': 'application/json'
+      'x-orbit-ip': ORBIT_IP
     }
   })
 
   if (!response.ok) {
-    throw new Error(`Orbit API respondió ${response.status}`)
+    throw new Error(`HTTP ${response.status}`)
   }
 
   const data = await response.json()
 
-  if (!data || data.status === false) {
+  if (!data || data.status !== true) {
     throw new Error(
-      data?.message ||
-      data?.error ||
-      'La API devolvió un error'
+      data?.error || 'La API de Orbit no devolvió un resultado válido'
     )
   }
 
@@ -50,394 +54,375 @@ async function orbitRequest(params) {
 }
 
 async function buscarAnime(query) {
-  const data = await orbitRequest({
-    action: 'search',
-    query
-  })
+  const data = await llamarOrbit(
+    'search',
+    `query=${encodeURIComponent(query)}`
+  )
 
-  return data.data?.results || data.results || []
+  if (!Array.isArray(data.result)) {
+    throw new Error('Respuesta de búsqueda inválida')
+  }
+
+  return data.result
 }
 
-async function obtenerEpisodios(animeId) {
-  const data = await orbitRequest({
-    action: 'episodes',
-    id: animeId
-  })
+async function obtenerEpisodios(link) {
+  const data = await llamarOrbit(
+    'episodes',
+    `link=${encodeURIComponent(link)}`
+  )
 
-  return data.data?.episodes || data.episodes || []
+  if (!Array.isArray(data.result)) {
+    throw new Error('Respuesta de episodios inválida')
+  }
+
+  return data.result
 }
 
 async function obtenerVideo(episodeId) {
-  const data = await orbitRequest({
-    action: 'download',
-    id: episodeId
+  const data = await llamarOrbit(
+    'download',
+    `episode=${encodeURIComponent(episodeId)}`
+  )
+
+  if (!data.result) {
+    throw new Error('No se obtuvo el link del video')
+  }
+
+  return data.result
+}
+
+async function enviarListaAnimes(
+  conn,
+  m,
+  animes,
+  usedPrefix,
+  query
+) {
+  return enviarLista(conn, m.chat, {
+    texto:
+      `🔎 *Resultados para:* ${query}\n\n` +
+      `🎬 Encontrados: ${animes.length}`,
+    footer: 'Selecciona un anime · expira en 3 minutos',
+    titulo: 'Anime Search',
+    textoBoton: 'Ver resultados',
+    mensajeCitado: m.raw,
+    secciones: [
+      {
+        titulo: `${animes.length} resultado(s)`,
+        filas: animes.map((anime, i) => ({
+          titulo: (anime.title || 'Sin título').slice(0, 60),
+          id: `${usedPrefix}animeep ${i}`,
+          descripcion: 'Toca para ver episodios'
+        }))
+      }
+    ]
   })
-
-  const result = data.data?.result || data.result
-
-  if (typeof result === 'string') {
-    return result
-  }
-
-  if (result?.url) {
-    return result.url
-  }
-
-  if (result?.download) {
-    return result.download
-  }
-
-  if (result?.video) {
-    return result.video
-  }
-
-  throw new Error('La API no devolvió un enlace de video válido')
 }
 
-function limpiarNombre(nombre) {
-  return String(nombre || 'anime')
-    .replace(/[<>:"/\\|?*\x00-\x1F]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 180)
+async function enviarListaEpisodios(
+  conn,
+  m,
+  episodios,
+  usedPrefix,
+  tituloAnime
+) {
+  return enviarLista(conn, m.chat, {
+    texto:
+      `📺 *${tituloAnime}*\n\n` +
+      `🎬 Episodios: ${episodios.length}`,
+    footer: 'Selecciona un episodio · expira en 3 minutos',
+    titulo: 'Anime Episodes',
+    textoBoton: 'Ver episodios',
+    mensajeCitado: m.raw,
+    secciones: [
+      {
+        titulo: `${episodios.length} episodio(s)`,
+        filas: episodios.map((ep, i) => ({
+          titulo: (ep.name || `Episodio ${i + 1}`).slice(0, 60),
+          id: `${usedPrefix}animedl ${i}`,
+          descripcion: 'Toca para descargar'
+        }))
+      }
+    ]
+  })
 }
 
-async function enviarResultadosAnime(conn, m, resultados) {
-  const filas = resultados
-    .slice(0, MAX_RESULTADOS)
-    .map((anime, index) => ({
-      title:
-        anime.title ||
-        anime.name ||
-        `Anime ${index + 1}`,
-      description:
-        anime.description ||
-        anime.type ||
-        'Anime',
-      id: String(
-        anime.id ||
-        anime.animeId ||
-        index
-      )
-    }))
-
-  await enviarLista(
+let handler = async (
+  m,
+  {
     conn,
-    m.chat,
-    'ꕥ Resultados de anime',
-    'Selecciona un anime',
-    'ANIME',
-    filas,
-    m.raw
-  )
-}
-
-async function enviarEpisodios(conn, m, pendiente) {
-  const episodios = await obtenerEpisodios(
-    pendiente.animeId
-  )
-
-  if (!episodios.length) {
-    throw new Error(
-      'No se encontraron episodios para este anime'
-    )
+    text,
+    usedPrefix,
+    command,
+    args
   }
+) => {
+  limpiarBusquedasVencidas()
 
-  pendiente.episodios = episodios
+  const comando = (command || '').toLowerCase()
+  const clave = claveBusqueda(m)
 
-  const filas = episodios.map((episodio, index) => ({
-    title:
-      episodio.name ||
-      episodio.title ||
-      `Episodio ${index + 1}`,
-    description:
-      episodio.description ||
-      `Episodio ${index + 1}`,
-    id: String(
-      episodio.id ||
-      episodio.episodeId ||
-      index
-    )
-  }))
-
-  await enviarLista(
-    conn,
-    m.chat,
-    `ꕥ ${pendiente.animeTitulo}`,
-    'Selecciona un episodio',
-    'ANIME_EPISODIOS',
-    filas,
-    m.raw
-  )
-}
-
-let handler = async (m, { conn, text, command }) => {
-  try {
-    const input = String(text || '').trim()
+  if (comando === 'animeep') {
+    const indice = Number(args[0])
+    const pendiente = busquedasPendientes.get(clave)
 
     if (
-      command === 'anime' ||
-      command === 'animesearch'
+      !pendiente ||
+      !pendiente.animes ||
+      Number.isNaN(indice) ||
+      !pendiente.animes[indice]
     ) {
-      if (!input) {
-        return responder(
-          conn,
-          m,
-          'ꕥ Escribe el nombre del anime.\n\n> Ejemplo: .anime Naruto'
-        )
-      }
-
-      const resultados = await buscarAnime(input)
-
-      if (!resultados.length) {
-        return responder(
-          conn,
-          m,
-          'ꕥ No encontré resultados para ese anime.'
-        )
-      }
-
-      const key = `${m.chat}:${m.sender}`
-
-      animeBusquedasPendientes.set(key, {
-        resultados,
-        creadoEn: Date.now()
-      })
-
-      setTimeout(() => {
-        const pendiente =
-          animeBusquedasPendientes.get(key)
-
-        if (
-          pendiente &&
-          Date.now() - pendiente.creadoEn >=
-            TIEMPO_SELECCION_MS
-        ) {
-          animeBusquedasPendientes.delete(key)
+      return conn.sendMessage(
+        m.chat,
+        {
+          text:
+            `❌ Esa búsqueda expiró o no es válida.\n\n` +
+            `> Usa ${usedPrefix}anime de nuevo.`
+        },
+        {
+          quoted: m.raw
         }
-      }, TIEMPO_SELECCION_MS)
-
-      return enviarResultadosAnime(
-        conn,
-        m,
-        resultados
       )
     }
 
-    if (command === 'animeep') {
-      if (!input) {
-        return responder(
-          conn,
-          m,
-          'ꕥ Usa el ID del anime.\n\n> Ejemplo: .animeep 123'
-        )
-      }
+    const anime = pendiente.animes[indice]
 
-      const key = `${m.chat}:${m.sender}`
-
-      const pendiente =
-        animeBusquedasPendientes.get(key)
-
-      if (!pendiente) {
-        return responder(
-          conn,
-          m,
-          'ꕥ No hay una búsqueda de anime activa o ya expiró.'
-        )
-      }
-
-      const anime =
-        pendiente.resultados.find(
-          x =>
-            String(
-              x.id ||
-              x.animeId
-            ) === input
-        ) ||
-        pendiente.resultados[
-          Number(input)
-        ]
-
-      if (!anime) {
-        return responder(
-          conn,
-          m,
-          'ꕥ No encontré ese anime en la búsqueda.'
-        )
-      }
-
-      const animeId =
-        anime.id ||
-        anime.animeId
-
-      pendiente.animeId = animeId
-
-      pendiente.animeTitulo =
-        anime.title ||
-        anime.name ||
-        'Anime'
-
-      pendiente.creadoEn = Date.now()
-
-      return enviarEpisodios(
-        conn,
-        m,
-        pendiente
-      )
-    }
-
-    if (command === 'animedl') {
-      if (!input) {
-        return responder(
-          conn,
-          m,
-          'ꕥ Usa el ID del episodio.\n\n> Ejemplo: .animedl 123'
-        )
-      }
-
-      const key = `${m.chat}:${m.sender}`
-
-      const pendiente =
-        animeBusquedasPendientes.get(key)
-
-      if (!pendiente) {
-        return responder(
-          conn,
-          m,
-          'ꕥ No hay una selección de anime activa o ya expiró.'
-        )
-      }
-
-      if (
-        !pendiente.episodios ||
-        !pendiente.episodios.length
-      ) {
-        return responder(
-          conn,
-          m,
-          'ꕥ Primero selecciona un anime para cargar sus episodios.'
-        )
-      }
-
-      const episodio =
-        pendiente.episodios.find(
-          x =>
-            String(
-              x.id ||
-              x.episodeId
-            ) === input
-        ) ||
-        pendiente.episodios[
-          Number(input)
-        ]
-
-      if (!episodio) {
-        return responder(
-          conn,
-          m,
-          'ꕥ No encontré ese episodio.'
-        )
-      }
-
-      const episodioId =
-        episodio.id ||
-        episodio.episodeId
-
-      await responder(
-        conn,
-        m,
-        `ꕥ Preparando el episodio...\n> ✐ ${
-          episodio.name ||
-          episodio.title ||
-          'Episodio'
-        }`
-      )
-
-      const videoUrl =
-        await obtenerVideo(episodioId)
-
-      if (
-        typeof videoUrl !== 'string' ||
-        !videoUrl.trim() ||
-        !/^https?:\/\//i.test(videoUrl)
-      ) {
-        throw new Error(
-          'La API devolvió un enlace de video inválido'
-        )
-      }
-
-      const titulo =
-        limpiarNombre(
-          pendiente.animeTitulo
-        )
-
-      const nombreEpisodio =
-        limpiarNombre(
-          episodio.name ||
-          episodio.title ||
-          `Episodio ${episodioId}`
-        )
-
+    try {
       await conn.sendMessage(
         m.chat,
         {
-          document: {
-            url: videoUrl
-          },
-          mimetype: 'video/mp4',
-          fileName:
-            `${titulo} - ${nombreEpisodio}.mp4`,
-          caption:
-            `ꕥ *${pendiente.animeTitulo}*\n` +
-            `> ✐ ${
-              episodio.name ||
-              episodio.title ||
-              'Episodio'
-            }`
+          text: `📺 *_Cargando episodios de "${anime.title}"..._*`
         },
         {
           quoted: m.raw
         }
       )
 
-      return
+      const episodios = await obtenerEpisodios(anime.link)
+
+      if (!episodios.length) {
+        return conn.sendMessage(
+          m.chat,
+          {
+            text: `❌ Ese anime no tiene episodios disponibles.`
+          },
+          {
+            quoted: m.raw
+          }
+        )
+      }
+
+      const episodiosRecortados = episodios.slice(
+        0,
+        MAX_RESULTADOS
+      )
+
+      busquedasPendientes.set(clave, {
+        animes: pendiente.animes,
+        episodios: episodiosRecortados,
+        animeTitulo: anime.title,
+        expira: Date.now() + TIEMPO_SELECCION_MS
+      })
+
+      return enviarListaEpisodios(
+        conn,
+        m,
+        episodiosRecortados,
+        usedPrefix,
+        anime.title
+      )
+    } catch (error) {
+      console.error('[ANIME]', error)
+
+      return conn.sendMessage(
+        m.chat,
+        {
+          text:
+            `❌ Ocurrió un error al buscar episodios.\n\n` +
+            `> ${error.message || 'Error desconocido'}`
+        },
+        {
+          quoted: m.raw
+        }
+      )
+    }
+  }
+
+  if (comando === 'animedl') {
+    const indice = Number(args[0])
+    const pendiente = busquedasPendientes.get(clave)
+
+    if (
+      !pendiente ||
+      !pendiente.episodios ||
+      Number.isNaN(indice) ||
+      !pendiente.episodios[indice]
+    ) {
+      return conn.sendMessage(
+        m.chat,
+        {
+          text:
+            `❌ Esa selección expiró o no es válida.\n\n` +
+            `> Usa ${usedPrefix}anime de nuevo.`
+        },
+        {
+          quoted: m.raw
+        }
+      )
     }
 
-  } catch (error) {
-    console.error(
-      'ERROR ANIME:',
-      error
+    const episodio = pendiente.episodios[indice]
+
+    try {
+      await conn.sendMessage(
+        m.chat,
+        {
+          text: `⬇️ *_Obteniendo "${episodio.name}"..._*`
+        },
+        {
+          quoted: m.raw
+        }
+      )
+
+      const videoUrl = await obtenerVideo(episodio.id)
+
+      console.log('[ANIME] VIDEO URL:', videoUrl)
+      console.log('[ANIME] VIDEO URL TYPE:', typeof videoUrl)
+
+      if (
+        typeof videoUrl !== 'string' ||
+        !videoUrl.trim()
+      ) {
+        throw new Error('La API devolvió un enlace de video inválido')
+      }
+
+      console.log('[ANIME] Enviando documento a WhatsApp...')
+
+      return conn.sendMessage(
+        m.chat,
+        {
+          document: {
+            url: videoUrl
+          },
+          mimetype: 'video/mp4',
+          fileName: `${pendiente.animeTitulo} - ${episodio.name}.mp4`,
+          caption:
+            `ꕥ *${pendiente.animeTitulo}*\n` +
+            `> ✐ ${episodio.name}`
+        },
+        {
+          quoted: m.raw
+        }
+      )
+    } catch (error) {
+      console.error('[ANIME] ERROR COMPLETO:', error)
+
+      return conn.sendMessage(
+        m.chat,
+        {
+          text:
+            `❌ Ocurrió un error al descargar el video.\n\n` +
+            `> ${error.message || 'Error desconocido'}`
+        },
+        {
+          quoted: m.raw
+        }
+      )
+    }
+  }
+
+  if (!text || !text.trim()) {
+    return conn.sendMessage(
+      m.chat,
+      {
+        text:
+          `❌ Escribe el nombre de un anime.\n\n` +
+          `📌 Ejemplo:\n` +
+          `${usedPrefix}anime one piece`
+      },
+      {
+        quoted: m.raw
+      }
+    )
+  }
+
+  const query = text.trim()
+
+  try {
+    await conn.sendMessage(
+      m.chat,
+      {
+        text:
+          `🔎 *Buscando anime...*\n\n` +
+          `> ${query}`
+      },
+      {
+        quoted: m.raw
+      }
     )
 
-    let mensaje =
-      error?.message ||
-      'Error desconocido'
+    const animes = await buscarAnime(query)
 
-    if (
-      mensaje.includes(
-        'Unknown system error -122'
+    if (!animes.length) {
+      return conn.sendMessage(
+        m.chat,
+        {
+          text:
+            `❌ No encontré resultados para:\n` +
+            `> ${query}`
+        },
+        {
+          quoted: m.raw
+        }
       )
-    ) {
-      mensaje =
-        'El sistema no pudo escribir el archivo. El almacenamiento o la cuota del servidor puede estar agotada.'
     }
 
-    if (
-      mensaje.includes(
-        'fetch failed'
+    const resultados = animes
+      .filter(
+        a => a && a.link && a.title
       )
-    ) {
-      mensaje =
-        'No se pudo conectar con la API de anime o con el servidor del video.'
+      .slice(0, MAX_RESULTADOS)
+
+    if (!resultados.length) {
+      throw new Error(
+        'No se encontraron animes válidos'
+      )
     }
 
-    return responder(
+    busquedasPendientes.set(clave, {
+      animes: resultados,
+      episodios: null,
+      animeTitulo: null,
+      expira: Date.now() + TIEMPO_SELECCION_MS
+    })
+
+    return enviarListaAnimes(
       conn,
       m,
-      `ꕥ *Ocurrió un error ejecutando el comando:*\n> ${mensaje}`
+      resultados,
+      usedPrefix,
+      query
+    )
+  } catch (error) {
+    console.error('[ANIME]', error)
+
+    return conn.sendMessage(
+      m.chat,
+      {
+        text:
+          `❌ Ocurrió un error al buscar.\n\n` +
+          `> ${error.message || 'Error desconocido'}`
+      },
+      {
+        quoted: m.raw
+      }
     )
   }
 }
+
+handler.help = ['anime <búsqueda>']
+handler.tags = ['anime']
 
 handler.command = [
   'anime',
@@ -446,14 +431,6 @@ handler.command = [
   'animedl'
 ]
 
-handler.help = [
-  'anime <nombre>',
-  'animeep <id>',
-  'animedl <id>'
-]
-
-handler.tags = [
-  'anime'
-]
+handler.registro = false
 
 module.exports = handler
