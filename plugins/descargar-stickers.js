@@ -1,6 +1,5 @@
 const { enviarLista } = require('../lib/botones')
 const sharp = require('sharp')
-const { Sticker, StickerTypes } = require('wa-sticker-formatter')
 
 const API_KEY = process.env.ORBIT_API_KEY || 'ORBIT-3540596307'
 const API_BASE = 'https://orbit-cloud.onrender.com/api/v1'
@@ -10,9 +9,8 @@ const TIEMPO_SELECCION_MS = 3 * 60 * 1000
 const MAX_RESULTADOS = 10
 const MAX_PACK = 5
 
-const PACK_NAME = 'Lil Matthieu'
-const PACK_AUTHOR = 'Lil Matthieu'
-const PACK_DESCRIPTION = 'Es un legado'
+const CREDITOS = 'By Lil Matthieu'
+const DESCRIPCION = 'Es un legado'
 
 if (!global.stickerBusquedasPendientes) {
   global.stickerBusquedasPendientes = new Map()
@@ -81,8 +79,66 @@ async function descargarImagen(url) {
   return Buffer.from(await res.arrayBuffer())
 }
 
-async function prepararSticker(url) {
+function escaparXML(texto) {
+  return String(texto)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;')
+}
+
+async function convertirAWebp(url) {
   const buffer = await descargarImagen(url)
+
+  const base = sharp(buffer, {
+    animated: true,
+    pages: -1
+  })
+
+  const metadata = await base.metadata()
+
+  const width = Math.min(metadata.width || 512, 512)
+  const height = Math.min(metadata.height || 512, 512)
+
+  const creditosSvg = Buffer.from(`
+    <svg width="${width}" height="${height}">
+      <style>
+        .credit {
+          font-family: Arial, Helvetica, sans-serif;
+          font-weight: bold;
+          font-size: ${Math.max(16, Math.round(width * 0.045))}px;
+          fill: white;
+          stroke: black;
+          stroke-width: 2px;
+          paint-order: stroke;
+        }
+
+        .desc {
+          font-family: Arial, Helvetica, sans-serif;
+          font-size: ${Math.max(12, Math.round(width * 0.032))}px;
+          fill: white;
+          stroke: black;
+          stroke-width: 1.5px;
+          paint-order: stroke;
+        }
+      </style>
+
+      <text
+        x="50%"
+        y="${height - Math.max(38, Math.round(height * 0.08))}"
+        text-anchor="middle"
+        class="credit"
+      >${escaparXML(CREDITOS)}</text>
+
+      <text
+        x="50%"
+        y="${height - Math.max(16, Math.round(height * 0.035))}"
+        text-anchor="middle"
+        class="desc"
+      >${escaparXML(DESCRIPCION)}</text>
+    </svg>
+  `)
 
   return sharp(buffer, {
     animated: true,
@@ -97,28 +153,18 @@ async function prepararSticker(url) {
         alpha: 0
       }
     })
+    .composite([
+      {
+        input: creditosSvg,
+        gravity: 'south'
+      }
+    ])
     .webp({
       quality: 80,
       effort: 4,
       loop: 0
     })
     .toBuffer()
-}
-
-async function convertirASticker(url) {
-  const webp = await prepararSticker(url)
-
-  const sticker = new Sticker(webp, {
-    pack: PACK_NAME,
-    author: PACK_AUTHOR,
-    type: StickerTypes.FULL,
-    categories: ['✨'],
-    id: `orbit-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    quality: 80,
-    background: 'transparent'
-  })
-
-  return sticker.build()
 }
 
 async function enviarListaStickers(
@@ -131,12 +177,10 @@ async function enviarListaStickers(
   return enviarLista(conn, m.chat, {
     texto:
       `🔎 *Stickers para:* ${query}\n\n` +
-      `🎨 Encontrados: ${stickers.length}\n` +
-      `📦 Pack: ${PACK_NAME}\n` +
-      `✐ ${PACK_DESCRIPTION}`,
+      `🎨 Encontrados: ${stickers.length}`,
 
     footer:
-      `By ${PACK_AUTHOR} · Selecciona uno o envía el pack · expira en 3 min`,
+      `Selecciona uno o envía el pack · expira en 3 min`,
 
     titulo: 'Sticker Search',
 
@@ -153,8 +197,7 @@ async function enviarListaStickers(
 
           id: `${usedPrefix}stickerget ${i}`,
 
-          descripcion:
-            `By ${PACK_AUTHOR} · ${PACK_DESCRIPTION}`
+          descripcion: 'Toca para enviarlo'
         }))
       },
 
@@ -163,15 +206,12 @@ async function enviarListaStickers(
 
         filas: [
           {
-            titulo: `📦 Enviar pack de ${Math.min(
-              MAX_PACK,
-              stickers.length
-            )}`,
+            titulo: `Enviar los primeros ${MAX_PACK}`,
 
             id: `${usedPrefix}stickerpack`,
 
             descripcion:
-              `${PACK_NAME} · ${PACK_DESCRIPTION}`
+              `${CREDITOS} · ${DESCRIPCION}`
           }
         ]
       }
@@ -220,20 +260,7 @@ let handler = async (
     const sticker = pendiente.stickers[indice]
 
     try {
-      await conn.sendMessage(
-        m.chat,
-        {
-          text:
-            `🎨 *_Enviando "${sticker.title}"..._*\n\n` +
-            `📦 ${PACK_NAME}\n` +
-            `✐ ${PACK_DESCRIPTION}`
-        },
-        {
-          quoted: m.raw
-        }
-      )
-
-      const webp = await convertirASticker(sticker.image)
+      const webp = await convertirAWebp(sticker.image)
 
       await conn.sendMessage(
         m.chat,
@@ -282,27 +309,12 @@ let handler = async (
 
     const pack = pendiente.stickers.slice(0, MAX_PACK)
 
-    await conn.sendMessage(
-      m.chat,
-      {
-        text:
-          `📦 *Enviando pack...*\n\n` +
-          `✐ Autor: ${PACK_AUTHOR}\n` +
-          `🎨 Pack: ${PACK_NAME}\n` +
-          `📝 ${PACK_DESCRIPTION}\n\n` +
-          `🎟️ Stickers: ${pack.length}`
-      },
-      {
-        quoted: m.raw
-      }
-    )
-
     let ok = 0
     let fail = 0
 
     for (const s of pack) {
       try {
-        const webp = await convertirASticker(s.image)
+        const webp = await convertirAWebp(s.image)
 
         await conn.sendMessage(
           m.chat,
@@ -324,27 +336,6 @@ let handler = async (
         fail++
       }
     }
-
-    let resultado =
-      `📦 *Pack enviado*\n\n` +
-      `🎨 ${PACK_NAME}\n` +
-      `✐ By ${PACK_AUTHOR}\n` +
-      `📝 ${PACK_DESCRIPTION}\n\n` +
-      `✅ ${ok} enviados`
-
-    if (fail > 0) {
-      resultado += `\n❌ ${fail} fallaron`
-    }
-
-    await conn.sendMessage(
-      m.chat,
-      {
-        text: resultado
-      },
-      {
-        quoted: m.raw
-      }
-    )
 
     return
   }
