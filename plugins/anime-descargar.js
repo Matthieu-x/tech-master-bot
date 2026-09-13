@@ -6,7 +6,7 @@ const ORBIT_IP = process.env.ORBIT_IP || '10.25.121.79'
 
 const TIEMPO_SELECCION_MS = 3 * 60 * 1000
 const MAX_RESULTADOS = 10
-const MAX_VIDEO_SIZE = 60 * 1024 * 1024
+const MAX_VIDEO_SIZE = 200 * 1024 * 1024
 
 if (!global.animeBusquedasPendientes) {
   global.animeBusquedasPendientes = new Map()
