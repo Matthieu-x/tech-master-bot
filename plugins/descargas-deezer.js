@@ -2,6 +2,7 @@ const { enviarBotones, enviarLista } = require('../lib/botones')
 
 const API_KEY = process.env.ORBIT_API_KEY || 'ORBIT-3540596307'
 const API_BASE = 'https://orbitcloud.hidenfree.com/api/v1'
+const ORBIT_IP = process.env.ORBIT_IP || '10.25.121.79'
 
 const TIEMPO_SELECCION_MS = 5 * 60 * 1000
 const MAX_RESULTADOS = 10
@@ -30,11 +31,16 @@ async function buscarDeezer(query) {
     `${API_BASE}/search/deezer?apikey=${encodeURIComponent(API_KEY)}` +
     `&q=${encodeURIComponent(query)}`
 
-  const res = await fetch(url)
+  const res = await fetch(url, {
+    headers: { 'x-orbit-ip': ORBIT_IP }   // ✅ IP agregada
+  })
 
   if (!res.ok) {
     if (res.status === 429) {
       throw new Error('Se agotaron las solicitudes de hoy (429)')
+    }
+    if (res.status === 403) {
+      throw new Error('IP bloqueada o endpoint no permitido en tu plan (403)')
     }
     throw new Error(`HTTP ${res.status}`)
   }
@@ -53,7 +59,9 @@ async function buscarDeezer(query) {
 }
 
 async function descargarBuffer(url) {
-  const res = await fetch(url)
+  const res = await fetch(url, {
+    headers: { 'x-orbit-ip': ORBIT_IP }
+  })
   if (!res.ok) {
     throw new Error(`Fallo descarga: HTTP ${res.status}`)
   }
@@ -100,7 +108,6 @@ async function enviarBotonMas(conn, m, usedPrefix, query, restantes) {
 }
 
 async function enviarCancion(conn, m, cancion) {
-  // 1. Portada + info
   const caption =
     `🎵 *${cancion.title}*\n\n` +
     `👤 Artista: ${cancion.artist}\n` +
@@ -117,7 +124,6 @@ async function enviarCancion(conn, m, cancion) {
     { quoted: m.raw }
   )
 
-  // 2. Preview de 30s como audio
   if (cancion.preview) {
     try {
       const audioBuffer = await descargarBuffer(cancion.preview)
@@ -125,7 +131,7 @@ async function enviarCancion(conn, m, cancion) {
         m.chat,
         {
           audio: audioBuffer,
-          mimetype: 'audio/mp4',
+          mimetype: 'audio/mpeg',
           ptt: false,
           fileName: `${cancion.title} - ${cancion.artist}.mp3`
         },
@@ -143,7 +149,6 @@ let handler = async (m, { conn, text, usedPrefix, command, args }) => {
   const comando = (command || '').toLowerCase()
   const clave = claveBusqueda(m)
 
-  // ── Enviar canción seleccionada ──
   if (comando === 'deezerget') {
     const indice = Number(args[0])
     const pendiente = pendientes.get(clave)
@@ -181,7 +186,6 @@ let handler = async (m, { conn, text, usedPrefix, command, args }) => {
     }
   }
 
-  // ── Botón "más canciones" ──
   if (comando === 'deezermas') {
     const pendiente = pendientes.get(clave)
 
@@ -193,7 +197,6 @@ let handler = async (m, { conn, text, usedPrefix, command, args }) => {
       )
     }
 
-    // Envía la lista completa de nuevo
     return enviarListaDeezer(
       conn,
       m,
@@ -203,7 +206,6 @@ let handler = async (m, { conn, text, usedPrefix, command, args }) => {
     )
   }
 
-  // ── Búsqueda inicial ──
   if (!text || !text.trim()) {
     return conn.sendMessage(
       m.chat,
