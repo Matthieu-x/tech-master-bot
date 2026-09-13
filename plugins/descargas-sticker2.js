@@ -1,28 +1,27 @@
-const { enviarLista } = require('../lib/botones')
+const { enviarBotones, enviarLista } = require('../lib/botones')
 const sharp = require('sharp')
 
 const API_KEY = process.env.ORBIT_API_KEY || 'ORBIT-3540596307'
 const API_BASE = 'https://orbitcloud.hidenfree.com/api/v1'
 const ORBIT_IP = process.env.ORBIT_IP || '10.25.121.79'
 
-const TIEMPO_SELECCION_MS = 3 * 60 * 1000
-const MAX_RESULTADOS = 10
-const MAX_PACK = 5
+const TIEMPO_SELECCION_MS = 5 * 60 * 1000
+const MAX_ENVIO = 10
 
 const CREDITOS = 'By Lil Matthieu'
 const DESCRIPCION = 'Es un legado'
 
-if (!global.stickerBusquedasPendientes) {
-  global.stickerBusquedasPendientes = new Map()
+if (!global.sticker2Pendientes) {
+  global.sticker2Pendientes = new Map()
 }
 
-const busquedasPendientes = global.stickerBusquedasPendientes
+const pendientes = global.sticker2Pendientes
 
-function limpiarBusquedasVencidas() {
+function limpiarVencidas() {
   const ahora = Date.now()
-  for (const [clave, valor] of busquedasPendientes) {
+  for (const [clave, valor] of pendientes) {
     if (!valor || ahora > valor.expira) {
-      busquedasPendientes.delete(clave)
+      pendientes.delete(clave)
     }
   }
 }
@@ -37,9 +36,7 @@ async function llamarOrbit(ruta, query) {
     `&${query}`
 
   const response = await fetch(url, {
-    headers: {
-      'x-orbit-ip': ORBIT_IP
-    }
+    headers: { 'x-orbit-ip': ORBIT_IP }
   })
 
   if (!response.ok) {
@@ -56,7 +53,6 @@ async function llamarOrbit(ruta, query) {
 }
 
 async function buscarStickers(query) {
-  // ✅ Ruta correcta
   const data = await llamarOrbit(
     'search/stickerly',
     `query=${encodeURIComponent(query)}`
@@ -66,15 +62,15 @@ async function buscarStickers(query) {
     throw new Error('Resultados inválidos')
   }
 
-  // ✅ Normalizamos campos: preview -> image, name -> title
-  return data.results.map(s => ({
-    image: s.preview,
-    title: s.name,
-    author: s.author,
-    url: s.url,
-    isAnimated: s.isAnimated,
-    sticker_count: s.sticker_count
-  })).filter(s => s.image && s.title)
+  return data.results
+    .map(s => ({
+      image: s.preview,
+      title: s.name,
+      author: s.author,
+      url: s.url,
+      isAnimated: s.isAnimated
+    }))
+    .filter(s => s.image && s.title)
 }
 
 async function descargarImagen(url) {
@@ -97,11 +93,7 @@ function escaparXML(texto) {
 async function convertirAWebp(url) {
   const buffer = await descargarImagen(url)
 
-  const base = sharp(buffer, {
-    animated: true,
-    pages: -1
-  })
-
+  const base = sharp(buffer, { animated: true, pages: -1 })
   const metadata = await base.metadata()
 
   const width = Math.min(metadata.width || 512, 512)
@@ -135,10 +127,7 @@ async function convertirAWebp(url) {
     </svg>
   `)
 
-  return sharp(buffer, {
-    animated: true,
-    pages: -1
-  })
+  return sharp(buffer, { animated: true, pages: -1 })
     .resize(512, 512, {
       fit: 'contain',
       background: { r: 0, g: 0, b: 0, alpha: 0 }
@@ -148,108 +137,115 @@ async function convertirAWebp(url) {
     .toBuffer()
 }
 
-async function enviarListaStickers(conn, m, stickers, usedPrefix, query) {
-  return enviarLista(conn, m.chat, {
-    texto:
-      `🔎 *Stickers para:* ${query}\n\n` +
-      `🎨 Encontrados: ${stickers.length}`,
-    footer: `Selecciona uno o envía el pack · expira en 3 min`,
-    titulo: 'Sticker Search',
-    textoBoton: 'Ver stickers',
-    mensajeCitado: m.raw,
-    secciones: [
+function shuffle(arr) {
+  const a = [...arr]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
+}
+
+async function enviarLote(conn, m, stickers) {
+  const lote = stickers.slice(0, MAX_ENVIO)
+  let enviados = 0
+
+  for (const s of lote) {
+    try {
+      const webp = await convertirAWebp(s.image)
+      await conn.sendMessage(m.chat, { sticker: webp }, { quoted: m.raw })
+      enviados++
+    } catch (e) {
+      console.error('[STICKER2] Falló sticker:', e.message)
+    }
+  }
+
+  return enviados
+}
+
+async function enviarBotonMas(conn, m, usedPrefix, query, restantes) {
+  const texto =
+    `✅ *Enviados ${MAX_ENVIO} stickers*\n\n` +
+    `🔎 Búsqueda: ${query}\n` +
+    `📦 Disponibles: ${restantes}`
+
+  // ✅ Firma correcta: enviarBotones(conn, chat, { texto, footer, botones, mensajeCitado })
+  return enviarBotones(conn, m.chat, {
+    texto,
+    footer: `Expira en 5 min · ${CREDITOS}`,
+    botones: [
       {
-        titulo: `${stickers.length} resultado(s)`,
-        filas: stickers.map((s, i) => ({
-          titulo: (s.title || 'Sticker').slice(0, 60),
-          id: `${usedPrefix}stickerget ${i}`,
-          descripcion: `Por ${s.author || 'anónimo'}`
-        }))
-      },
-      {
-        titulo: 'Pack',
-        filas: [
-          {
-            titulo: `Enviar los primeros ${MAX_PACK}`,
-            id: `${usedPrefix}stickerpack`,
-            descripcion: `${CREDITOS} · ${DESCRIPCION}`
-          }
-        ]
+        texto: '📥 Más stickers',
+        id: `${usedPrefix}sticker2mas`
       }
-    ]
+    ],
+    mensajeCitado: m.raw
   })
 }
 
-let handler = async (m, { conn, text, usedPrefix, command, args }) => {
-  limpiarBusquedasVencidas()
+let handler = async (m, { conn, text, usedPrefix, command }) => {
+  limpiarVencidas()
 
   const comando = (command || '').toLowerCase()
   const clave = claveBusqueda(m)
 
-  if (comando === 'stickerget') {
-    const indice = Number(args[0])
-    const pendiente = busquedasPendientes.get(clave)
+  // ── Botón "Más stickers" ──
+  if (comando === 'sticker2mas') {
+    const pendiente = pendientes.get(clave)
 
-    if (
-      !pendiente ||
-      !pendiente.stickers ||
-      Number.isNaN(indice) ||
-      !pendiente.stickers[indice]
-    ) {
+    if (!pendiente || !pendiente.restantes || !pendiente.restantes.length) {
       return conn.sendMessage(
         m.chat,
-        { text: `❌ Esa búsqueda expiró.\n\n> Usa ${usedPrefix}sticker de nuevo.` },
+        {
+          text:
+            `❌ Se agotaron los stickers o expiró la búsqueda.\n\n` +
+            `> Usa ${usedPrefix}sticker2 de nuevo.`
+        },
         { quoted: m.raw }
       )
     }
-
-    const sticker = pendiente.stickers[indice]
 
     try {
-      const webp = await convertirAWebp(sticker.image)
-      await conn.sendMessage(m.chat, { sticker: webp }, { quoted: m.raw })
-      return
-    } catch (e) {
-      console.error('[STICKER]', e)
-      return conn.sendMessage(
-        m.chat,
-        { text: `❌ Error al procesar el sticker.\n\n> ${e.message}` },
-        { quoted: m.raw }
-      )
-    }
-  }
+      const lote = pendiente.restantes.slice(0, MAX_ENVIO)
+      const enviados = await enviarLote(conn, m, lote)
 
-  if (comando === 'stickerpack') {
-    const pendiente = busquedasPendientes.get(clave)
+      pendiente.restantes = pendiente.restantes.slice(enviados)
+      pendiente.expira = Date.now() + TIEMPO_SELECCION_MS
+      pendientes.set(clave, pendiente)
 
-    if (!pendiente || !pendiente.stickers) {
-      return conn.sendMessage(
-        m.chat,
-        { text: `❌ Esa búsqueda expiró.\n\n> Usa ${usedPrefix}sticker de nuevo.` },
-        { quoted: m.raw }
-      )
-    }
-
-    const pack = pendiente.stickers.slice(0, MAX_PACK)
-
-    for (const s of pack) {
-      try {
-        const webp = await convertirAWebp(s.image)
-        await conn.sendMessage(m.chat, { sticker: webp }, { quoted: m.raw })
-      } catch (e) {
-        console.error(`[STICKER] Falló "${s.title}":`, e.message)
+      if (!pendiente.restantes.length) {
+        return conn.sendMessage(
+          m.chat,
+          { text: `✅ No hay más stickers para "${pendiente.query}"` },
+          { quoted: m.raw }
+        )
       }
+
+      return enviarBotonMas(
+        conn,
+        m,
+        usedPrefix,
+        pendiente.query,
+        pendiente.restantes.length
+      )
+    } catch (e) {
+      console.error('[STICKER2]', e)
+      return conn.sendMessage(
+        m.chat,
+        { text: `❌ Error al enviar más stickers.\n\n> ${e.message}` },
+        { quoted: m.raw }
+      )
     }
-    return
   }
 
+  // ── Búsqueda inicial ──
   if (!text || !text.trim()) {
     return conn.sendMessage(
       m.chat,
       {
         text:
           `❌ Escribe qué sticker buscar.\n\n` +
-          `📌 Ejemplo:\n${usedPrefix}sticker gato`
+          `📌 Ejemplo:\n${usedPrefix}sticker2 gato`
       },
       { quoted: m.raw }
     )
@@ -274,16 +270,37 @@ let handler = async (m, { conn, text, usedPrefix, command, args }) => {
       )
     }
 
-    const resultados = stickers.slice(0, MAX_RESULTADOS)
+    const mezclados = shuffle(stickers)
+    const lote = mezclados.slice(0, MAX_ENVIO)
+    const restantes = mezclados.slice(MAX_ENVIO)
 
-    busquedasPendientes.set(clave, {
-      stickers: resultados,
+    const enviados = await enviarLote(conn, m, lote)
+
+    if (enviados === 0) {
+      return conn.sendMessage(
+        m.chat,
+        { text: `❌ No se pudo enviar ningún sticker.` },
+        { quoted: m.raw }
+      )
+    }
+
+    pendientes.set(clave, {
+      query,
+      restantes,
       expira: Date.now() + TIEMPO_SELECCION_MS
     })
 
-    return enviarListaStickers(conn, m, resultados, usedPrefix, query)
+    if (!restantes.length) {
+      return conn.sendMessage(
+        m.chat,
+        { text: `✅ Enviados: ${enviados} stickers (no hay más)` },
+        { quoted: m.raw }
+      )
+    }
+
+    return enviarBotonMas(conn, m, usedPrefix, query, restantes.length)
   } catch (error) {
-    console.error('[STICKER]', error)
+    console.error('[STICKER2]', error)
     return conn.sendMessage(
       m.chat,
       { text: `❌ Error al buscar stickers.\n\n> ${error.message}` },
@@ -294,7 +311,7 @@ let handler = async (m, { conn, text, usedPrefix, command, args }) => {
 
 handler.help = ['sticker2 <búsqueda>']
 handler.tags = ['sticker']
-handler.command = ['sticker2']
+handler.command = ['sticker2', 'sticker2mas']
 handler.registro = false
 
 module.exports = handler
