@@ -1,4 +1,4 @@
-const { enviarBotones, enviarLista } = require('../lib/botones')
+const { enviarBotones } = require('../lib/botones')
 const sharp = require('sharp')
 
 const API_KEY = process.env.ORBIT_API_KEY || 'ORBIT-3540596307'
@@ -7,9 +7,6 @@ const ORBIT_IP = process.env.ORBIT_IP || '10.25.121.79'
 
 const TIEMPO_SELECCION_MS = 5 * 60 * 1000
 const MAX_ENVIO = 10
-
-const CREDITOS = 'By Lil Matthieu'
-const DESCRIPCION = 'Es un legado'
 
 if (!global.sticker2Pendientes) {
   global.sticker2Pendientes = new Map()
@@ -81,58 +78,14 @@ async function descargarImagen(url) {
   return Buffer.from(await res.arrayBuffer())
 }
 
-function escaparXML(texto) {
-  return String(texto)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;')
-}
-
 async function convertirAWebp(url) {
   const buffer = await descargarImagen(url)
-
-  const base = sharp(buffer, { animated: true, pages: -1 })
-  const metadata = await base.metadata()
-
-  const width = Math.min(metadata.width || 512, 512)
-  const height = Math.min(metadata.height || 512, 512)
-
-  const creditosSvg = Buffer.from(`
-    <svg width="${width}" height="${height}">
-      <style>
-        .credit {
-          font-family: Arial, Helvetica, sans-serif;
-          font-weight: bold;
-          font-size: ${Math.max(16, Math.round(width * 0.045))}px;
-          fill: white;
-          stroke: black;
-          stroke-width: 2px;
-          paint-order: stroke;
-        }
-        .desc {
-          font-family: Arial, Helvetica, sans-serif;
-          font-size: ${Math.max(12, Math.round(width * 0.032))}px;
-          fill: white;
-          stroke: black;
-          stroke-width: 1.5px;
-          paint-order: stroke;
-        }
-      </style>
-      <text x="50%" y="${height - Math.max(38, Math.round(height * 0.08))}"
-        text-anchor="middle" class="credit">${escaparXML(CREDITOS)}</text>
-      <text x="50%" y="${height - Math.max(16, Math.round(height * 0.035))}"
-        text-anchor="middle" class="desc">${escaparXML(DESCRIPCION)}</text>
-    </svg>
-  `)
 
   return sharp(buffer, { animated: true, pages: -1 })
     .resize(512, 512, {
       fit: 'contain',
       background: { r: 0, g: 0, b: 0, alpha: 0 }
     })
-    .composite([{ input: creditosSvg, gravity: 'south' }])
     .webp({ quality: 80, effort: 4, loop: 0 })
     .toBuffer()
 }
@@ -169,10 +122,9 @@ async function enviarBotonMas(conn, m, usedPrefix, query, restantes) {
     `🔎 Búsqueda: ${query}\n` +
     `📦 Disponibles: ${restantes}`
 
-  // ✅ Firma correcta: enviarBotones(conn, chat, { texto, footer, botones, mensajeCitado })
   return enviarBotones(conn, m.chat, {
     texto,
-    footer: `Expira en 5 min · ${CREDITOS}`,
+    footer: `Expira en 5 min`,
     botones: [
       {
         texto: '📥 Más stickers',
