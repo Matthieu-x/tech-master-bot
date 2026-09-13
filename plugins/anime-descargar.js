@@ -1,3 +1,4 @@
+const { Readable } = require('stream')
 const { enviarLista } = require('../lib/botones')
 
 const API_KEY = process.env.ORBIT_API_KEY || 'ORBIT-3540596307'
@@ -6,7 +7,6 @@ const ORBIT_IP = process.env.ORBIT_IP || '10.25.121.79'
 
 const TIEMPO_SELECCION_MS = 3 * 60 * 1000
 const MAX_RESULTADOS = 10
-const MAX_VIDEO_SIZE = 200 * 1024 * 1024
 
 if (!global.animeBusquedasPendientes) {
   global.animeBusquedasPendientes = new Map()
@@ -94,53 +94,38 @@ async function obtenerVideo(episodeId) {
   return data.result
 }
 
-async function descargarVideo(url) {
+async function obtenerStreamVideo(url) {
   const response = await fetch(url, {
     redirect: 'follow'
   })
 
   if (!response.ok) {
     throw new Error(
-      `No se pudo descargar el video: HTTP ${response.status}`
+      `No se pudo obtener el video: HTTP ${response.status}`
     )
+  }
+
+  if (!response.body) {
+    throw new Error('El servidor no devolvió un stream de video')
   }
 
   const contentType =
     response.headers.get('content-type') || ''
 
-  const contentLength =
-    Number(response.headers.get('content-length')) || 0
-
-  if (contentLength > MAX_VIDEO_SIZE) {
-    throw new Error(
-      `El video pesa ${(contentLength / 1024 / 1024).toFixed(2)} MB y supera el límite de 60 MB`
-    )
-  }
-
   if (
     !contentType.includes('video') &&
-    !contentType.includes('octet-stream')
+    !contentType.includes('octet-stream') &&
+    !contentType.includes('application/vnd.apple.mpegurl')
   ) {
     throw new Error(
       `El servidor no devolvió un video. Content-Type: ${contentType}`
     )
   }
 
-  const arrayBuffer = await response.arrayBuffer()
-  const buffer = Buffer.from(arrayBuffer)
-
-  if (!buffer.length) {
-    throw new Error('El video descargado está vacío')
-  }
-
-  if (buffer.length > MAX_VIDEO_SIZE) {
-    throw new Error(
-      `El video pesa ${(buffer.length / 1024 / 1024).toFixed(2)} MB y supera el límite de 60 MB`
-    )
-  }
+  const stream = Readable.fromWeb(response.body)
 
   return {
-    buffer,
+    stream,
     contentType
   }
 }
@@ -353,21 +338,22 @@ let handler = async (
       }
 
       const {
-        buffer: videoBuffer,
+        stream,
         contentType
-      } = await descargarVideo(videoUrl)
+      } = await obtenerStreamVideo(videoUrl)
 
-      const mimetype =
-        contentType.includes('webm')
-          ? 'video/webm'
-          : contentType.includes('mkv')
-            ? 'video/x-matroska'
-            : 'video/mp4'
+      let mimetype = 'video/mp4'
+
+      if (contentType.includes('webm')) {
+        mimetype = 'video/webm'
+      } else if (contentType.includes('quicktime')) {
+        mimetype = 'video/quicktime'
+      }
 
       await conn.sendMessage(
         m.chat,
         {
-          video: videoBuffer,
+          video: stream,
           mimetype,
           caption:
             `ꕥ *${pendiente.animeTitulo}*\n` +
@@ -403,7 +389,7 @@ let handler = async (
         text:
           `❌ Escribe el nombre de un anime.\n\n` +
           `📌 Ejemplo:\n` +
-          `${usedPrefix}anime Lil Matthieu es un legado`
+          `${usedPrefix}anime one piece`
       },
       {
         quoted: m.raw
