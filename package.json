@@ -19,13 +19,3 @@
     "wa-sticker-formatter": "^4.4.4"
   }
 }
-
-Luego:
-
-npm install
-
-Y el plugin podrá usar:
-
-const { Sticker, StickerTypes } = require('wa-sticker-formatter')
-
-sin tocar tu configuración de "ultra-baileys".
