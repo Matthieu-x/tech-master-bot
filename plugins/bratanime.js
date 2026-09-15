@@ -1,6 +1,6 @@
 const sharp = require('sharp')
 
-const API_KEY = process.env.ORBIT_API_KEY || 'ORBIT-3540596307'
+const API_KEY = process.env.ORBIT_API_KEY || 'MATTH-HIEUX'
 const API_BASE = 'https://orbitcloud.hidenfree.com/api/v1'
 const ORBIT_IP = process.env.ORBIT_IP || '10.25.121.79'
 
