@@ -17,12 +17,17 @@ async function obtenerGacha() {
   }
 
   const data = await res.json()
-
   if (!data || data.status !== true || !data.data) {
     throw new Error(data?.error || 'Respuesta inválida')
   }
-
   return data.data
+}
+
+// ✅ Nueva función: descarga la imagen como buffer
+async function descargarImagen(url) {
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`Fallo descarga: HTTP ${res.status}`)
+  return Buffer.from(await res.arrayBuffer())
 }
 
 let handler = async (m, { conn }) => {
@@ -35,10 +40,30 @@ let handler = async (m, { conn }) => {
 
     const p = await obtenerGacha()
 
+    // 1. Descargar la imagen (evita el problema del http://)
+    let imagen
+    try {
+      imagen = await descargarImagen(p.image)
+    } catch (e) {
+      // Si falla la descarga, enviamos el link como fallback
+      return conn.sendMessage(
+        m.chat,
+        {
+          text:
+            `🎴 *${p.name}*\n\n` +
+            `📺 Anime: ${p.anime}\n` +
+            `⚧ Género: ${p.gender}\n\n` +
+            `⚠️ No se pudo mostrar la imagen, pero aquí está el link:\n${p.image}`
+        },
+        { quoted: m.raw }
+      )
+    }
+
+    // 2. Enviar imagen desde buffer
     return conn.sendMessage(
       m.chat,
       {
-        image: { url: p.image },
+        image: imagen,
         caption:
           `🎴 *${p.name}*\n\n` +
           `📺 Anime: ${p.anime}\n` +
