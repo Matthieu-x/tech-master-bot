@@ -14,14 +14,9 @@ const ORBIT_IP = process.env.ORBIT_IP || '10.25.121.79'
 const TIEMPO_SELECCION_MS = 5 * 60 * 1000
 const MAX_RESULTADOS = 10
 
-// ==========================================
-// CONFIGURACIÓN DE LA TARJETA
-// ==========================================
-
 const CARD_WIDTH = 720
 const CARD_HEIGHT = 900
 
-// 12 FPS × 10 segundos = 120 frames
 const FPS = 12
 const DURACION_CARD = 10
 const FRAMES = FPS * DURACION_CARD
@@ -31,10 +26,6 @@ if (!global.tiktokPendientes) {
 }
 
 const pendientes = global.tiktokPendientes
-
-// ==========================================
-// LIMPIAR BÚSQUEDAS EXPIRADAS
-// ==========================================
 
 function limpiarVencidas() {
   const ahora = Date.now()
@@ -46,17 +37,9 @@ function limpiarVencidas() {
   }
 }
 
-// ==========================================
-// CLAVE DE BÚSQUEDA
-// ==========================================
-
 function claveBusqueda(m) {
   return `${m.chat}_${m.senderNumero || m.sender}`
 }
-
-// ==========================================
-// ESCAPAR HTML
-// ==========================================
 
 function escapeHtml(text = '') {
   return String(text)
@@ -67,44 +50,29 @@ function escapeHtml(text = '') {
     .replace(/'/g, '&#039;')
 }
 
-// ==========================================
-// FORMATEAR NÚMEROS
-// ==========================================
-
 function formatearNumero(n) {
-  if (!n) return '0'
-
   n = Number(n) || 0
 
-  if (n >= 1_000_000) {
-    return (n / 1_000_000).toFixed(1) + 'M'
+  if (n >= 1000000) {
+    return (n / 1000000).toFixed(1) + 'M'
   }
 
-  if (n >= 1_000) {
-    return (n / 1_000).toFixed(1) + 'K'
+  if (n >= 1000) {
+    return (n / 1000).toFixed(1) + 'K'
   }
 
   return String(n)
 }
 
-// ==========================================
-// FORMATEAR DURACIÓN
-// ==========================================
-
 function formatearDuracion(seg) {
   const s = Number(seg) || 0
-
   const m = Math.floor(s / 60)
   const r = s % 60
 
   return m > 0
-    ? `${m}m ${r}s`
+    ? `${m}m ${String(r).padStart(2, '0')}s`
     : `${r}s`
 }
-
-// ==========================================
-// ORBIT API
-// ==========================================
 
 async function orbitFetch(apiPath, params = {}) {
   const qs = new URLSearchParams({
@@ -122,9 +90,7 @@ async function orbitFetch(apiPath, params = {}) {
 
   if (!res.ok) {
     if (res.status === 401) {
-      throw new Error(
-        'API key inválida o IP no registrada (401)'
-      )
+      throw new Error('API key inválida o IP no registrada (401)')
     }
 
     if (res.status === 403) {
@@ -132,9 +98,7 @@ async function orbitFetch(apiPath, params = {}) {
     }
 
     if (res.status === 429) {
-      throw new Error(
-        'Se agotaron las solicitudes (429)'
-      )
+      throw new Error('Se agotaron las solicitudes (429)')
     }
 
     throw new Error(`HTTP ${res.status}`)
@@ -143,107 +107,49 @@ async function orbitFetch(apiPath, params = {}) {
   return res.json()
 }
 
-// ==========================================
-// BUSCAR TIKTOK
-// ==========================================
-
 async function buscarTikTok(query) {
-  const data = await orbitFetch(
-    'tiktok-search',
-    { query }
-  )
+  const data = await orbitFetch('tiktok-search', { query })
 
   if (
     !data ||
     data.status !== true ||
     !Array.isArray(data.results)
   ) {
-    throw new Error(
-      data?.error || 'Respuesta inválida'
-    )
+    throw new Error(data?.error || 'Respuesta inválida')
   }
 
   return data.results
 }
 
-// ==========================================
-// DESCARGAR TIKTOK
-// ==========================================
-
-async function descargarTikTokPorUrl(url) {
-  const data = await orbitFetch(
-    'download/tiktok',
-    { url }
-  )
-
-  if (
-    !data ||
-    data.status !== true ||
-    !data.data?.video
-  ) {
-    throw new Error(
-      data?.error || 'Respuesta inválida'
-    )
-  }
-
-  return data.data
-}
-
-// ==========================================
-// EJECUTAR FFMPEG
-// ==========================================
-
 function ejecutarFFmpeg(args) {
   return new Promise((resolve, reject) => {
-    const proceso = spawn(
-      ffmpegPath,
-      args
-    )
+    const proceso = spawn(ffmpegPath, args)
 
     let stderr = ''
 
-    proceso.stderr.on(
-      'data',
-      data => {
-        stderr += data.toString()
-      }
-    )
+    proceso.stderr.on('data', data => {
+      stderr += data.toString()
+    })
 
-    proceso.on(
-      'error',
-      error => {
-        reject(error)
-      }
-    )
+    proceso.on('error', reject)
 
-    proceso.on(
-      'close',
-      code => {
-        if (code === 0) {
-          resolve()
-          return
-        }
-
+    proceso.on('close', code => {
+      if (code === 0) {
+        resolve()
+      } else {
         reject(
           new Error(
             `FFmpeg terminó con código ${code}\n${stderr}`
           )
         )
       }
-    )
+    })
   })
 }
 
-// ==========================================
-// ELIMINAR TEMPORALES
-// ==========================================
-
 function eliminarDirectorio(dir) {
   try {
-    if (
-      dir &&
-      fs.existsSync(dir)
-    ) {
+    if (dir && fs.existsSync(dir)) {
       fs.rmSync(dir, {
         recursive: true,
         force: true
@@ -257,29 +163,22 @@ function eliminarDirectorio(dir) {
   }
 }
 
-// ==========================================
-// CREAR TARJETA ANIMADA
-// ==========================================
+/*
+========================================
+CREAR TARJETA ANIMADA
+========================================
+*/
 
 async function crearTarjetaTikTok(video) {
   const tempDir = fs.mkdtempSync(
-    path.join(
-      os.tmpdir(),
-      'tiktok-card-'
-    )
+    path.join(os.tmpdir(), 'tiktok-card-')
   )
 
-  const framesDir = path.join(
-    tempDir,
-    'frames'
-  )
+  const framesDir = path.join(tempDir, 'frames')
 
-  fs.mkdirSync(
-    framesDir,
-    {
-      recursive: true
-    }
-  )
+  fs.mkdirSync(framesDir, {
+    recursive: true
+  })
 
   const outputVideo = path.join(
     tempDir,
@@ -289,70 +188,49 @@ async function crearTarjetaTikTok(video) {
   const cover =
     video.video?.cover ||
     video.video?.originCover ||
-    video.video?.dynamicCover ||
-    ''
+    video.video?.dynamicCover
 
   if (!cover) {
     eliminarDirectorio(tempDir)
-    throw new Error(
-      'El TikTok no proporcionó una miniatura'
-    )
+    throw new Error('El TikTok no proporcionó miniatura')
   }
 
   const author =
-    video.author?.uniqueId ||
-    '?'
+    video.author?.uniqueId || '?'
 
   const nickname =
-    video.author?.nickname ||
-    ''
+    video.author?.nickname || ''
 
   const descripcion =
-    video.desc ||
-    'Sin descripción'
+    video.desc || 'Sin descripción'
 
   const views =
-    formatearNumero(
-      video.stats?.playCount
-    )
+    formatearNumero(video.stats?.playCount)
 
   const likes =
-    formatearNumero(
-      video.stats?.diggCount
-    )
+    formatearNumero(video.stats?.diggCount)
 
   const comments =
-    formatearNumero(
-      video.stats?.commentCount
-    )
+    formatearNumero(video.stats?.commentCount)
 
   const duration =
-    formatearDuracion(
-      video.video?.duration
-    )
+    formatearDuracion(video.video?.duration)
 
   const url =
     video.url || ''
 
-  // ========================================
-  // PUPPETEER
-  // ========================================
-
-  const browser =
-    await puppeteer.launch({
-      headless: true,
-
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu'
-      ]
-    })
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu'
+    ]
+  })
 
   try {
-    const page =
-      await browser.newPage()
+    const page = await browser.newPage()
 
     await page.setViewport({
       width: CARD_WIDTH,
@@ -360,17 +238,10 @@ async function crearTarjetaTikTok(video) {
       deviceScaleFactor: 1
     })
 
-    // ======================================
-    // HTML DE LA TARJETA
-    // ======================================
-
     const html = `
 <!DOCTYPE html>
-
 <html>
-
 <head>
-
 <meta charset="UTF-8">
 
 <style>
@@ -381,178 +252,141 @@ async function crearTarjetaTikTok(video) {
 
 html,
 body {
-
   margin: 0;
   padding: 0;
-
   width: ${CARD_WIDTH}px;
   height: ${CARD_HEIGHT}px;
-
   overflow: hidden;
-
-  background: #050505;
-
-  font-family:
-    Arial,
-    Helvetica,
-    sans-serif;
-}
-
-body {
-
-  display: flex;
-
-  align-items: center;
-
-  justify-content: center;
+  background: #000;
+  font-family: Arial, Helvetica, sans-serif;
 }
 
 .card {
-
   position: relative;
-
-  width: ${CARD_WIDTH}px;
-  height: ${CARD_HEIGHT}px;
-
+  width: 720px;
+  height: 900px;
   overflow: hidden;
-
-  border-radius: 38px;
-
+  border-radius: 40px;
   color: white;
-
-  background: #080808;
-
-  box-shadow:
-    0 30px 80px
-    rgba(0,0,0,.75);
+  background: #050505;
 }
 
-/* ========================================
-   FONDO CON LA MISMA MINIATURA
-======================================== */
-
 .background {
-
   position: absolute;
-
-  inset: -80px;
+  inset: -100px;
 
   background-image:
     url("${escapeHtml(cover)}");
 
   background-size: cover;
-
   background-position: center;
 
   filter:
-    blur(38px)
-    brightness(.30)
-    saturate(1.35);
+    blur(45px)
+    brightness(.25)
+    saturate(1.5);
 
-  transform: scale(1.18);
+  transform:
+    scale(1.3)
+    translate(0px, 0px);
 }
 
-/* ========================================
-   OSCURECER FONDO
-======================================== */
-
 .overlay {
-
   position: absolute;
-
   inset: 0;
 
   background:
     linear-gradient(
       180deg,
-      rgba(0,0,0,.22) 0%,
-      rgba(0,0,0,.12) 25%,
-      rgba(0,0,0,.40) 60%,
-      rgba(0,0,0,.97) 100%
+      rgba(0,0,0,.08) 0%,
+      rgba(0,0,0,.12) 35%,
+      rgba(0,0,0,.60) 72%,
+      rgba(0,0,0,.98) 100%
     );
 }
 
-/* ========================================
-   LUZ ANIMADA
-======================================== */
+/* LUZ ANIMADA */
 
-.light {
-
+.beam {
   position: absolute;
 
-  width: 520px;
-  height: 520px;
+  width: 260px;
+  height: 1200px;
 
-  border-radius: 50%;
-
-  background:
-    radial-gradient(
-      circle,
-      rgba(255,255,255,.14),
-      transparent 68%
-    );
-
-  filter: blur(30px);
+  left: -400px;
+  top: -150px;
 
   transform:
-    translate(-200px,-180px);
+    rotate(22deg);
+
+  background:
+    linear-gradient(
+      90deg,
+      transparent,
+      rgba(255,255,255,.08),
+      rgba(255,255,255,.32),
+      rgba(255,255,255,.08),
+      transparent
+    );
+
+  filter: blur(22px);
 }
 
-/* ========================================
-   CONTENIDO
-======================================== */
+/* BORDE ANIMADO */
+
+.glow {
+  position: absolute;
+  inset: 8px;
+
+  border-radius: 34px;
+
+  border:
+    2px solid
+    rgba(255,255,255,.10);
+
+  box-shadow:
+    0 0 25px
+    rgba(255,255,255,.05);
+}
+
+/* CONTENIDO */
 
 .content {
-
   position: absolute;
-
   inset: 0;
 
   padding: 36px;
 
   display: flex;
-
   flex-direction: column;
 
   justify-content: space-between;
 }
 
-/* ========================================
-   HEADER
-======================================== */
+/* HEADER */
 
 .header {
-
   display: flex;
-
   align-items: center;
-
   justify-content: space-between;
+
+  transform:
+    translateY(0px);
 }
 
 .brand {
-
-  font-size: 22px;
-
-  font-weight: 800;
-
-  letter-spacing: .3px;
+  font-size: 24px;
+  font-weight: 900;
 }
 
 .creator {
-
   margin-top: 5px;
-
   font-size: 13px;
-
-  color:
-    rgba(255,255,255,.65);
+  color: rgba(255,255,255,.65);
 }
 
 .badge {
-
-  padding:
-    9px 15px;
+  padding: 10px 16px;
 
   border-radius: 999px;
 
@@ -561,172 +395,174 @@ body {
 
   border:
     1px solid
-    rgba(255,255,255,.16);
+    rgba(255,255,255,.18);
 
   font-size: 13px;
+  font-weight: 800;
 
-  font-weight: 700;
-
-  backdrop-filter:
-    blur(15px);
+  backdrop-filter: blur(15px);
 }
 
-/* ========================================
-   CENTRO
-======================================== */
+/* CENTRO */
 
 .center {
-
   margin-top: auto;
-
   margin-bottom: auto;
 
-  display: flex;
-
-  flex-direction: column;
+  transform:
+    translateY(0px);
 }
 
-/* ========================================
-   MINIATURA
-======================================== */
+/* MINIATURA */
 
 .thumbnail {
+  position: relative;
 
-  width: 100%;
-
-  height: 370px;
+  width: 648px;
+  height: 390px;
 
   overflow: hidden;
 
-  border-radius: 28px;
+  border-radius: 30px;
 
-  margin-bottom: 25px;
+  margin-bottom: 26px;
 
   background: #111;
 
   border:
     1px solid
-    rgba(255,255,255,.15);
+    rgba(255,255,255,.20);
 
   box-shadow:
-    0 20px 50px
-    rgba(0,0,0,.55);
+    0 25px 70px
+    rgba(0,0,0,.70);
+
+  transform:
+    scale(1);
+
+  will-change: transform;
 }
 
 .thumbnail img {
-
   width: 100%;
   height: 100%;
 
   display: block;
 
   object-fit: cover;
+
+  transform:
+    scale(1);
+
+  will-change: transform;
 }
 
-/* ========================================
-   AUTOR
-======================================== */
+/* REFLEJO */
+
+.thumbnail::after {
+  content: "";
+
+  position: absolute;
+
+  inset: 0;
+
+  background:
+    linear-gradient(
+      115deg,
+      transparent 35%,
+      rgba(255,255,255,.22) 48%,
+      transparent 60%
+    );
+
+  transform:
+    translateX(-130%);
+
+  pointer-events: none;
+}
+
+/* AUTOR */
 
 .author {
-
-  font-size: 28px;
-
-  font-weight: 800;
+  font-size: 30px;
+  font-weight: 900;
 
   margin-bottom: 5px;
 
   text-shadow:
-    0 3px 15px
-    rgba(0,0,0,.8);
+    0 5px 20px
+    rgba(0,0,0,.9);
 }
 
 .nickname {
-
   font-size: 15px;
 
   color:
-    rgba(255,255,255,.70);
+    rgba(255,255,255,.68);
 
   margin-bottom: 15px;
 }
 
-/* ========================================
-   DESCRIPCIÓN
-======================================== */
+/* DESCRIPCIÓN */
 
 .description {
-
-  font-size: 22px;
+  font-size: 21px;
 
   line-height: 1.25;
 
   font-weight: 600;
 
-  max-height: 84px;
+  max-height: 82px;
 
   overflow: hidden;
 
   text-shadow:
-    0 3px 15px
+    0 4px 18px
     rgba(0,0,0,.9);
 }
 
-/* ========================================
-   ESTADÍSTICAS
-======================================== */
+/* ESTADÍSTICAS */
 
 .stats {
-
   display: flex;
-
   gap: 10px;
 
-  margin-top: 19px;
+  margin-top: 20px;
 }
 
 .stat {
-
-  padding:
-    10px 14px;
+  padding: 10px 14px;
 
   border-radius: 15px;
 
   background:
-    rgba(0,0,0,.45);
+    rgba(0,0,0,.48);
 
   border:
     1px solid
-    rgba(255,255,255,.12);
+    rgba(255,255,255,.14);
 
   font-size: 13px;
+  font-weight: 800;
 
-  font-weight: 700;
-
-  backdrop-filter:
-    blur(15px);
+  backdrop-filter: blur(15px);
 }
 
-/* ========================================
-   FOOTER
-======================================== */
+/* FOOTER */
 
 .footer {
-
   display: flex;
 
   align-items: center;
-
   justify-content: space-between;
 
   padding-top: 18px;
 
   border-top:
     1px solid
-    rgba(255,255,255,.12);
+    rgba(255,255,255,.14);
 }
 
 .url {
-
   max-width: 470px;
 
   overflow: hidden;
@@ -738,13 +574,11 @@ body {
   font-size: 11px;
 
   color:
-    rgba(255,255,255,.50);
+    rgba(255,255,255,.48);
 }
 
 .duration {
-
-  padding:
-    8px 12px;
+  padding: 8px 12px;
 
   border-radius: 11px;
 
@@ -752,12 +586,10 @@ body {
     rgba(255,255,255,.10);
 
   font-size: 13px;
-
-  font-weight: 700;
+  font-weight: 800;
 }
 
 </style>
-
 </head>
 
 <body>
@@ -766,9 +598,11 @@ body {
 
   <div class="background"></div>
 
-  <div class="light"></div>
+  <div class="beam"></div>
 
   <div class="overlay"></div>
+
+  <div class="glow"></div>
 
   <div class="content">
 
@@ -787,7 +621,7 @@ body {
       </div>
 
       <div class="badge">
-        TikTok
+        TIKTOK
       </div>
 
     </div>
@@ -803,21 +637,17 @@ body {
 
       </div>
 
-
       <div class="author">
         @${escapeHtml(author)}
       </div>
-
 
       <div class="nickname">
         ${escapeHtml(nickname)}
       </div>
 
-
       <div class="description">
         ${escapeHtml(descripcion)}
       </div>
-
 
       <div class="stats">
 
@@ -855,119 +685,169 @@ body {
 </div>
 
 </body>
-
 </html>
 `
 
-    await page.setContent(
-      html,
-      {
-        waitUntil:
-          'networkidle0'
-      }
-    )
+    await page.setContent(html, {
+      waitUntil: 'networkidle0'
+    })
 
-    // ======================================
-    // GENERAR 120 FRAMES = 10 SEGUNDOS
-    // ======================================
+    /*
+    ========================================
+    120 FRAMES
+    12 FPS × 10 SEGUNDOS
+    ========================================
+    */
 
-    for (
-      let i = 0;
-      i < FRAMES;
-      i++
-    ) {
+    for (let i = 0; i < FRAMES; i++) {
 
-      const progreso =
-        i / FRAMES
+      const t = i / (FRAMES - 1)
 
-      await page.evaluate(
-        (progreso) => {
+      await page.evaluate((t) => {
 
-          const light =
-            document.querySelector(
-              '.light'
-            )
+        const bg =
+          document.querySelector('.background')
 
-          const background =
-            document.querySelector(
-              '.background'
-            )
+        const beam =
+          document.querySelector('.beam')
 
-          const thumbnail =
-            document.querySelector(
-              '.thumbnail'
-            )
+        const thumb =
+          document.querySelector('.thumbnail')
 
-          // Movimiento de luz
-          if (light) {
+        const thumbImg =
+          document.querySelector('.thumbnail img')
 
-            const x =
-              Math.sin(
-                progreso *
-                Math.PI *
-                2
-              ) * 270
+        const center =
+          document.querySelector('.center')
 
-            const y =
-              Math.cos(
-                progreso *
-                Math.PI *
-                2
-              ) * 190
+        const header =
+          document.querySelector('.header')
 
-            light.style.transform =
-              `translate(${x}px,${y}px)`
-          }
+        const glow =
+          document.querySelector('.glow')
 
-          // Movimiento del fondo
-          if (background) {
+        /*
+        ================================
+        FONDO
+        ================================
+        */
 
-            const scale =
-              1.18 +
-              Math.sin(
-                progreso *
-                Math.PI *
-                2
-              ) * .045
+        const angle =
+          t * Math.PI * 2
 
-            const x =
-              Math.sin(
-                progreso *
-                Math.PI *
-                2
-              ) * 10
+        const bgX =
+          Math.sin(angle) * 18
 
-            const y =
-              Math.cos(
-                progreso *
-                Math.PI *
-                2
-              ) * 8
+        const bgY =
+          Math.cos(angle) * 14
 
-            background.style.transform =
-              `scale(${scale}) translate(${x}px,${y}px)`
-          }
+        const bgScale =
+          1.25 +
+          (
+            Math.sin(angle) + 1
+          ) * 0.035
 
-          // Zoom suave de miniatura
-          if (thumbnail) {
+        bg.style.transform =
+          `scale(${bgScale}) translate(${bgX}px, ${bgY}px)`
 
-            const scale =
-              1 +
-              (
-                Math.sin(
-                  progreso *
-                  Math.PI *
-                  2
-                ) + 1
-              ) * .0125
+        /*
+        ================================
+        ZOOM MINIATURA
+        ================================
+        */
 
-            thumbnail.style.transform =
-              `scale(${scale})`
-          }
+        const zoom =
+          1.015 +
+          (
+            Math.sin(angle * 1.5) + 1
+          ) * 0.018
 
-        },
-        progreso
-      )
+        const imgX =
+          Math.sin(angle * 1.2) * 7
+
+        const imgY =
+          Math.cos(angle * 1.1) * 5
+
+        thumb.style.transform =
+          `scale(${1 + Math.sin(angle) * 0.012})`
+
+        thumbImg.style.transform =
+          `scale(${zoom}) translate(${imgX}px, ${imgY}px)`
+
+        /*
+        ================================
+        REFLEJO
+        ================================
+        */
+
+        const shine =
+          -130 +
+          t * 260
+
+        thumb.style.setProperty(
+          '--shine',
+          `${shine}%`
+        )
+
+        /*
+        ================================
+        LUZ
+        ================================
+        */
+
+        const beamX =
+          -500 +
+          t * 1500
+
+        beam.style.left =
+          `${beamX}px`
+
+        beam.style.opacity =
+          String(
+            0.65 +
+            Math.sin(angle) * 0.25
+          )
+
+        /*
+        ================================
+        CONTENIDO
+        ================================
+        */
+
+        const contentY =
+          Math.sin(angle * 0.5) * 4
+
+        center.style.transform =
+          `translateY(${contentY}px)`
+
+        header.style.transform =
+          `translateY(${Math.cos(angle) * 3}px)`
+
+        /*
+        ================================
+        BORDE
+        ================================
+        */
+
+        const glowOpacity =
+          0.08 +
+          (
+            Math.sin(angle * 2) + 1
+          ) * 0.10
+
+        glow.style.boxShadow =
+          `0 0 35px rgba(255,255,255,${glowOpacity})`
+
+        glow.style.borderColor =
+          `rgba(255,255,255,${glowOpacity + 0.08})`
+
+      }, t)
+
+      /*
+      ==================================
+      CAPTURAR FRAME
+      ==================================
+      */
 
       const screenshot =
         await page.screenshot({
@@ -980,9 +860,7 @@ body {
           `frame-${String(i).padStart(4, '0')}.png`
         )
 
-      await sharp(
-        screenshot
-      )
+      await sharp(screenshot)
         .resize(
           CARD_WIDTH,
           CARD_HEIGHT,
@@ -993,19 +871,18 @@ body {
         .png({
           compressionLevel: 6
         })
-        .toFile(
-          framePath
-        )
+        .toFile(framePath)
     }
 
   } finally {
-
     await browser.close()
   }
 
-  // ========================================
-  // CONVERTIR FRAMES A MP4
-  // ========================================
+  /*
+  ========================================
+  PNG → MP4
+  ========================================
+  */
 
   await ejecutarFFmpeg([
     '-y',
@@ -1026,7 +903,7 @@ body {
     'veryfast',
 
     '-crf',
-    '27',
+    '23',
 
     '-pix_fmt',
     'yuv420p',
@@ -1046,115 +923,11 @@ body {
   }
 }
 
-// ==========================================
-// COMPRIMIR VIDEO DE TIKTOK
-// ==========================================
-
-async function comprimirTikTok(urlVideo) {
-  const tempDir = fs.mkdtempSync(
-    path.join(
-      os.tmpdir(),
-      'tiktok-video-'
-    )
-  )
-
-  const input =
-    path.join(
-      tempDir,
-      'original.mp4'
-    )
-
-  const output =
-    path.join(
-      tempDir,
-      'compressed.mp4'
-    )
-
-  try {
-
-    // ======================================
-    // DESCARGAR ORIGINAL
-    // ======================================
-
-    const respuesta =
-      await fetch(
-        urlVideo
-      )
-
-    if (!respuesta.ok) {
-      throw new Error(
-        `No se pudo descargar el video: HTTP ${respuesta.status}`
-      )
-    }
-
-    const buffer =
-      Buffer.from(
-        await respuesta.arrayBuffer()
-      )
-
-    fs.writeFileSync(
-      input,
-      buffer
-    )
-
-    // ======================================
-    // COMPRESIÓN
-    // ======================================
-
-    await ejecutarFFmpeg([
-      '-y',
-
-      '-i',
-      input,
-
-      // Máximo 720p
-      '-vf',
-      'scale=-2:min(720\\,ih)',
-
-      '-c:v',
-      'libx264',
-
-      // Más pequeño
-      '-crf',
-      '28',
-
-      '-preset',
-      'veryfast',
-
-      // Audio
-      '-c:a',
-      'aac',
-
-      '-b:a',
-      '96k',
-
-      '-pix_fmt',
-      'yuv420p',
-
-      '-movflags',
-      '+faststart',
-
-      output
-    ])
-
-    return {
-      file: output,
-      tempDir
-    }
-
-  } catch (error) {
-
-    eliminarDirectorio(
-      tempDir
-    )
-
-    throw error
-  }
-}
-
-// ==========================================
-// ENVIAR VIDEO
-// ==========================================
+/*
+========================================
+ENVIAR TIKTOK
+========================================
+*/
 
 async function enviarVideoTikTok(
   conn,
@@ -1167,28 +940,27 @@ async function enviarVideoTikTok(
     video.video?.download
 
   if (!urlVideo) {
-    throw new Error(
-      'Sin URL de video'
-    )
+    throw new Error('Sin URL de video')
   }
 
   let tarjeta = null
-  let videoComprimido = null
 
   try {
 
-    // ======================================
-    // CREAR TARJETA DE 10 SEGUNDOS
-    // ======================================
+    /*
+    ======================================
+    TARJETA ANIMADA
+    ======================================
+    */
 
     tarjeta =
-      await crearTarjetaTikTok(
-        video
-      )
+      await crearTarjetaTikTok(video)
 
-    // ======================================
-    // ENVIAR TARJETA
-    // ======================================
+    /*
+    ======================================
+    ENVIAR TARJETA
+    ======================================
+    */
 
     await conn.sendMessage(
       m.chat,
@@ -1204,82 +976,19 @@ async function enviarVideoTikTok(
         gifPlayback:
           true,
 
-        caption:
-          ''
+        caption: ''
       },
       {
-        quoted:
-          m.raw
+        quoted: m.raw
       }
     )
 
-    // ======================================
-    // COMPRIMIR TIKTOK
-    // ======================================
-
-    videoComprimido =
-      await comprimirTikTok(
-        urlVideo
-      )
-
-    // ======================================
-    // MINIATURA PARA PREVIEW
-    // ======================================
-
-    let jpegThumbnail = null
-
-    const cover =
-      video.video?.cover ||
-      video.video?.originCover ||
-      video.video?.dynamicCover
-
-    if (cover) {
-
-      try {
-
-        const thumbnailResponse =
-          await fetch(
-            cover
-          )
-
-        if (
-          thumbnailResponse.ok
-        ) {
-
-          const thumbnailBuffer =
-            Buffer.from(
-              await thumbnailResponse.arrayBuffer()
-            )
-
-          jpegThumbnail =
-            await sharp(
-              thumbnailBuffer
-            )
-              .resize(
-                320,
-                320,
-                {
-                  fit: 'cover'
-                }
-              )
-              .jpeg({
-                quality: 75
-              })
-              .toBuffer()
-        }
-
-      } catch (e) {
-
-        console.log(
-          '[TIKTOK] Error creando miniatura:',
-          e.message
-        )
-      }
-    }
-
-    // ======================================
-    // CAPTION
-    // ======================================
+    /*
+    ======================================
+    TIKTOK ORIGINAL
+    SIN COMPRESIÓN
+    ======================================
+    */
 
     const caption =
       `🎬 *@${video.author?.uniqueId || '?'}* ` +
@@ -1301,34 +1010,20 @@ async function enviarVideoTikTok(
 
       `🔗 ${video.url || urlVideo}`
 
-    const mensaje = {
-
-      video:
-        fs.readFileSync(
-          videoComprimido.file
-        ),
-
-      mimetype:
-        'video/mp4',
-
-      caption
-    }
-
-    if (jpegThumbnail) {
-      mensaje.jpegThumbnail =
-        jpegThumbnail
-    }
-
-    // ======================================
-    // ENVIAR TIKTOK COMPRIMIDO
-    // ======================================
-
     return conn.sendMessage(
       m.chat,
-      mensaje,
       {
-        quoted:
-          m.raw
+        video: {
+          url: urlVideo
+        },
+
+        mimetype:
+          'video/mp4',
+
+        caption
+      },
+      {
+        quoted: m.raw
       }
     )
 
@@ -1339,20 +1034,14 @@ async function enviarVideoTikTok(
         tarjeta.tempDir
       )
     }
-
-    if (
-      videoComprimido?.tempDir
-    ) {
-      eliminarDirectorio(
-        videoComprimido.tempDir
-      )
-    }
   }
 }
 
-// ==========================================
-// LISTA
-// ==========================================
+/*
+========================================
+LISTA
+========================================
+*/
 
 async function enviarListaTikTok(
   conn,
@@ -1388,42 +1077,39 @@ async function enviarListaTikTok(
             `${videos.length} video(s)`,
 
           filas:
-            videos.map(
-              (v, i) => ({
+            videos.map((v, i) => ({
 
-                titulo:
-                  `@${v.author?.uniqueId || '?'} · ` +
-                  `${v.desc?.slice(
-                    0,
-                    40
-                  ) || 'Sin desc'}`,
+              titulo:
+                `@${v.author?.uniqueId || '?'} · ` +
+                `${v.desc?.slice(0, 40) || 'Sin desc'}`,
 
-                id:
-                  `${usedPrefix}tiktokget ${i}`,
+              id:
+                `${usedPrefix}tiktokget ${i}`,
 
-                descripcion:
-                  `👁️ ${formatearNumero(
-                    v.stats?.playCount
-                  )} · ` +
+              descripcion:
+                `👁️ ${formatearNumero(
+                  v.stats?.playCount
+                )} · ` +
 
-                  `❤️ ${formatearNumero(
-                    v.stats?.diggCount
-                  )} · ` +
+                `❤️ ${formatearNumero(
+                  v.stats?.diggCount
+                )} · ` +
 
-                  `⏱️ ${formatearDuracion(
-                    v.video?.duration
-                  )}`
-              })
-            )
+                `⏱️ ${formatearDuracion(
+                  v.video?.duration
+                )}`
+            }))
         }
       ]
     }
   )
 }
 
-// ==========================================
-// BOTÓN MÁS
-// ==========================================
+/*
+========================================
+BOTÓN MÁS
+========================================
+*/
 
 async function enviarBotonMas(
   conn,
@@ -1461,9 +1147,11 @@ async function enviarBotonMas(
   )
 }
 
-// ==========================================
-// HANDLER
-// ==========================================
+/*
+========================================
+HANDLER
+========================================
+*/
 
 let handler = async (
   m,
@@ -1479,27 +1167,24 @@ let handler = async (
   limpiarVencidas()
 
   const comando =
-    (command || '')
-      .toLowerCase()
+    (command || '').toLowerCase()
 
   const clave =
     claveBusqueda(m)
 
-  // ========================================
-  // TIKTOKGET
-  // ========================================
+  /*
+  ======================================
+  TIKTOKGET
+  ======================================
+  */
 
-  if (
-    comando === 'tiktokget'
-  ) {
+  if (comando === 'tiktokget') {
 
     const indice =
       Number(args[0])
 
     const pendiente =
-      pendientes.get(
-        clave
-      )
+      pendientes.get(clave)
 
     if (
       !pendiente ||
@@ -1516,8 +1201,7 @@ let handler = async (
             `> Usa ${usedPrefix}tiktok de nuevo.`
         },
         {
-          quoted:
-            m.raw
+          quoted: m.raw
         }
       )
     }
@@ -1537,9 +1221,7 @@ let handler = async (
         pendiente.videos.length -
         (indice + 1)
 
-      if (
-        restantes > 0
-      ) {
+      if (restantes > 0) {
 
         return enviarBotonMas(
           conn,
@@ -1549,8 +1231,6 @@ let handler = async (
           restantes
         )
       }
-
-      return
 
     } catch (e) {
 
@@ -1567,25 +1247,24 @@ let handler = async (
             `> ${e.message}`
         },
         {
-          quoted:
-            m.raw
+          quoted: m.raw
         }
       )
     }
+
+    return
   }
 
-  // ========================================
-  // TIKTOKMAS
-  // ========================================
+  /*
+  ======================================
+  TIKTOKMAS
+  ======================================
+  */
 
-  if (
-    comando === 'tiktokmas'
-  ) {
+  if (comando === 'tiktokmas') {
 
     const pendiente =
-      pendientes.get(
-        clave
-      )
+      pendientes.get(clave)
 
     if (
       !pendiente ||
@@ -1600,8 +1279,7 @@ let handler = async (
             `> Usa ${usedPrefix}tiktok de nuevo.`
         },
         {
-          quoted:
-            m.raw
+          quoted: m.raw
         }
       )
     }
@@ -1615,9 +1293,11 @@ let handler = async (
     )
   }
 
-  // ========================================
-  // SIN TEXTO
-  // ========================================
+  /*
+  ======================================
+  SIN TEXTO
+  ======================================
+  */
 
   if (
     !text ||
@@ -1633,8 +1313,7 @@ let handler = async (
           `${usedPrefix}tiktok goku`
       },
       {
-        quoted:
-          m.raw
+        quoted: m.raw
       }
     )
   }
@@ -1642,9 +1321,11 @@ let handler = async (
   const query =
     text.trim()
 
-  // ========================================
-  // BUSCAR
-  // ========================================
+  /*
+  ======================================
+  BUSCAR
+  ======================================
+  */
 
   try {
 
@@ -1656,19 +1337,14 @@ let handler = async (
           `> ${query}`
       },
       {
-        quoted:
-          m.raw
+        quoted: m.raw
       }
     )
 
     const videos =
-      await buscarTikTok(
-        query
-      )
+      await buscarTikTok(query)
 
-    if (
-      !videos.length
-    ) {
+    if (!videos.length) {
 
       return conn.sendMessage(
         m.chat,
@@ -1678,8 +1354,7 @@ let handler = async (
             `> ${query}`
         },
         {
-          quoted:
-            m.raw
+          quoted: m.raw
         }
       )
     }
@@ -1727,16 +1402,11 @@ let handler = async (
           `> ${error.message}`
       },
       {
-        quoted:
-          m.raw
+        quoted: m.raw
       }
     )
   }
 }
-
-// ==========================================
-// CONFIGURACIÓN
-// ==========================================
 
 handler.help = [
   'tiktok <búsqueda>'
