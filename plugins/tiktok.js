@@ -7,23 +7,43 @@ const path = require('path')
 const os = require('os')
 const { spawn } = require('child_process')
 
-const API_KEY = process.env.ORBIT_API_KEY || 'MATTH-HIEUX'
-const API_BASE = 'https://orbitcloud.hidenfree.com/api/v1'
-const ORBIT_IP = process.env.ORBIT_IP || '10.25.121.79'
+// ==========================================
+// API
+// ==========================================
 
-const TIEMPO_SELECCION_MS = 5 * 60 * 1000
+const API_KEY =
+  process.env.ORBIT_API_KEY || 'MATTH-HIEUX'
+
+const API_BASE =
+  'https://orbitcloud.hidenfree.com/api/v1'
+
+const ORBIT_IP =
+  process.env.ORBIT_IP || '10.25.121.79'
+
+// ==========================================
+// BÚSQUEDA
+// ==========================================
+
+const TIEMPO_SELECCION_MS =
+  5 * 60 * 1000
+
 const MAX_RESULTADOS = 10
 
 // ==========================================
-// TARJETA
+// TARJETA ANIMADA
 // ==========================================
 
 const CARD_WIDTH = 720
 const CARD_HEIGHT = 900
 
 const FPS = 12
-const DURACION_CARD = 10
-const FRAMES = FPS * DURACION_CARD
+
+// IMPORTANTE:
+// duración de la tarjeta animada
+const CARD_DURATION = 10
+
+const FRAMES =
+  FPS * CARD_DURATION
 
 // ==========================================
 // PENDIENTES
@@ -33,17 +53,26 @@ if (!global.tiktokPendientes) {
   global.tiktokPendientes = new Map()
 }
 
-const pendientes = global.tiktokPendientes
+const pendientes =
+  global.tiktokPendientes
 
 // ==========================================
-// LIMPIAR BÚSQUEDAS VENCIDAS
+// LIMPIAR
 // ==========================================
 
 function limpiarVencidas() {
+
   const ahora = Date.now()
 
-  for (const [clave, valor] of pendientes) {
-    if (!valor || ahora > valor.expira) {
+  for (
+    const [clave, valor]
+    of pendientes
+  ) {
+
+    if (
+      !valor ||
+      ahora > valor.expira
+    ) {
       pendientes.delete(clave)
     }
   }
@@ -54,7 +83,12 @@ function limpiarVencidas() {
 // ==========================================
 
 function claveBusqueda(m) {
-  return `${m.chat}_${m.senderNumero || m.sender}`
+
+  return `${
+    m.chat
+  }_${
+    m.senderNumero || m.sender
+  }`
 }
 
 // ==========================================
@@ -62,72 +96,108 @@ function claveBusqueda(m) {
 // ==========================================
 
 function escapeHtml(text = '') {
+
   return String(text)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;')
+    .replace(
+      /&/g,
+      '&amp;'
+    )
+    .replace(
+      /</g,
+      '&lt;'
+    )
+    .replace(
+      />/g,
+      '&gt;'
+    )
+    .replace(
+      /"/g,
+      '&quot;'
+    )
+    .replace(
+      /'/g,
+      '&#039;'
+    )
 }
 
 // ==========================================
-// FORMATO DE NÚMEROS
+// NÚMEROS
 // ==========================================
 
 function formatearNumero(n) {
+
   n = Number(n) || 0
 
   if (n >= 1000000000) {
-    return (n / 1000000000).toFixed(1) + 'B'
+    return (
+      n / 1000000000
+    ).toFixed(1) + 'B'
   }
 
   if (n >= 1000000) {
-    return (n / 1000000).toFixed(1) + 'M'
+    return (
+      n / 1000000
+    ).toFixed(1) + 'M'
   }
 
   if (n >= 1000) {
-    return (n / 1000).toFixed(1) + 'K'
+    return (
+      n / 1000
+    ).toFixed(1) + 'K'
   }
 
   return String(n)
 }
 
 // ==========================================
-// FORMATO DURACIÓN
+// DURACIÓN
 // ==========================================
 
 function formatearDuracion(seg) {
-  const s = Number(seg) || 0
 
-  const minutos = Math.floor(s / 60)
-  const segundos = s % 60
+  const s =
+    Number(seg) || 0
 
-  if (minutos > 0) {
-    return `${minutos}:${String(segundos).padStart(2, '0')}`
-  }
+  const minutos =
+    Math.floor(s / 60)
 
-  return `0:${String(segundos).padStart(2, '0')}`
+  const segundos =
+    s % 60
+
+  return (
+    `${minutos}:` +
+    `${String(segundos).padStart(2, '0')}`
+  )
 }
 
 // ==========================================
-// ORBIT API
+// ORBIT FETCH
 // ==========================================
 
-async function orbitFetch(apiPath, params = {}) {
-  const qs = new URLSearchParams({
-    apikey: API_KEY,
-    ...params
-  }).toString()
+async function orbitFetch(
+  apiPath,
+  params = {}
+) {
 
-  const url = `${API_BASE}/${apiPath}?${qs}`
+  const qs =
+    new URLSearchParams({
+      apikey: API_KEY,
+      ...params
+    }).toString()
 
-  const res = await fetch(url, {
-    headers: {
-      'x-orbit-ip': ORBIT_IP
-    }
-  })
+  const url =
+    `${API_BASE}/${apiPath}?${qs}`
+
+  const res =
+    await fetch(url, {
+      headers: {
+        'x-orbit-ip':
+          ORBIT_IP
+      }
+    })
 
   if (!res.ok) {
+
     if (res.status === 401) {
       throw new Error(
         'API key inválida o IP no registrada (401)'
@@ -146,7 +216,9 @@ async function orbitFetch(apiPath, params = {}) {
       )
     }
 
-    throw new Error(`HTTP ${res.status}`)
+    throw new Error(
+      `HTTP ${res.status}`
+    )
   }
 
   return res.json()
@@ -157,18 +229,24 @@ async function orbitFetch(apiPath, params = {}) {
 // ==========================================
 
 async function buscarTikTok(query) {
-  const data = await orbitFetch(
-    'tiktok-search',
-    { query }
-  )
+
+  const data =
+    await orbitFetch(
+      'tiktok-search',
+      {
+        query
+      }
+    )
 
   if (
     !data ||
     data.status !== true ||
     !Array.isArray(data.results)
   ) {
+
     throw new Error(
-      data?.error || 'Respuesta inválida'
+      data?.error ||
+      'Respuesta inválida'
     )
   }
 
@@ -176,47 +254,53 @@ async function buscarTikTok(query) {
 }
 
 // ==========================================
-// EJECUTAR FFMPEG
+// FFMPEG
 // ==========================================
 
 function ejecutarFFmpeg(args) {
-  return new Promise((resolve, reject) => {
-    const proceso = spawn(
-      ffmpegPath,
-      args
-    )
 
-    let stderr = ''
+  return new Promise(
+    (resolve, reject) => {
 
-    proceso.stderr.on(
-      'data',
-      data => {
-        stderr += data.toString()
-      }
-    )
-
-    proceso.on(
-      'error',
-      reject
-    )
-
-    proceso.on(
-      'close',
-      code => {
-
-        if (code === 0) {
-          resolve()
-          return
-        }
-
-        reject(
-          new Error(
-            `FFmpeg terminó con código ${code}\n${stderr}`
-          )
+      const proceso =
+        spawn(
+          ffmpegPath,
+          args
         )
-      }
-    )
-  })
+
+      let stderr = ''
+
+      proceso.stderr.on(
+        'data',
+        data => {
+          stderr +=
+            data.toString()
+        }
+      )
+
+      proceso.on(
+        'error',
+        reject
+      )
+
+      proceso.on(
+        'close',
+        code => {
+
+          if (code === 0) {
+            resolve()
+            return
+          }
+
+          reject(
+            new Error(
+              `FFmpeg terminó con código ${code}\n${stderr}`
+            )
+          )
+        }
+      )
+    }
+  )
 }
 
 // ==========================================
@@ -224,6 +308,7 @@ function ejecutarFFmpeg(args) {
 // ==========================================
 
 function eliminarDirectorio(dir) {
+
   try {
 
     if (
@@ -243,7 +328,7 @@ function eliminarDirectorio(dir) {
   } catch (e) {
 
     console.error(
-      '[TIKTOK] Error limpiando temporales:',
+      '[TIKTOK] Error limpiando:',
       e.message
     )
   }
@@ -253,11 +338,16 @@ function eliminarDirectorio(dir) {
 // DESCARGAR MINIATURA
 // ==========================================
 
-async function descargarMiniatura(url, destino) {
+async function descargarMiniatura(
+  url,
+  destino
+) {
 
-  const res = await fetch(url)
+  const res =
+    await fetch(url)
 
   if (!res.ok) {
+
     throw new Error(
       `No se pudo descargar la miniatura: HTTP ${res.status}`
     )
@@ -280,14 +370,18 @@ async function descargarMiniatura(url, destino) {
     .jpeg({
       quality: 90
     })
-    .toFile(destino)
+    .toFile(
+      destino
+    )
 }
 
 // ==========================================
 // CREAR TARJETA ANIMADA
 // ==========================================
 
-async function crearTarjetaTikTok(video) {
+async function crearTarjetaTikTok(
+  video
+) {
 
   const cover =
     video.video?.cover ||
@@ -295,6 +389,7 @@ async function crearTarjetaTikTok(video) {
     video.video?.dynamicCover
 
   if (!cover) {
+
     throw new Error(
       'El TikTok no proporcionó miniatura'
     )
@@ -304,7 +399,7 @@ async function crearTarjetaTikTok(video) {
     fs.mkdtempSync(
       path.join(
         os.tmpdir(),
-        'tiktok-matthieu-'
+        'tiktok-card-'
       )
     )
 
@@ -347,13 +442,21 @@ async function crearTarjetaTikTok(video) {
     const coverBase64 =
       fs.readFileSync(
         coverPath
-      ).toString('base64')
+      ).toString(
+        'base64'
+      )
+
+    // ======================================
+    // DATOS
+    // ======================================
 
     const author =
-      video.author?.uniqueId || '?'
+      video.author?.uniqueId ||
+      '?'
 
     const nickname =
-      video.author?.nickname || ''
+      video.author?.nickname ||
+      ''
 
     const descripcion =
       video.desc ||
@@ -388,6 +491,7 @@ async function crearTarjetaTikTok(video) {
 
     const browser =
       await puppeteer.launch({
+
         headless: true,
 
         args: [
@@ -395,6 +499,7 @@ async function crearTarjetaTikTok(video) {
           '--disable-setuid-sandbox',
           '--disable-dev-shm-usage'
         ]
+
       })
 
     try {
@@ -403,8 +508,12 @@ async function crearTarjetaTikTok(video) {
         await browser.newPage()
 
       await page.setViewport({
-        width: CARD_WIDTH,
-        height: CARD_HEIGHT,
+        width:
+          CARD_WIDTH,
+
+        height:
+          CARD_HEIGHT,
+
         deviceScaleFactor: 1
       })
 
@@ -438,7 +547,7 @@ body {
 
   overflow: hidden;
 
-  background: transparent;
+  background: #000;
 
   font-family:
     Arial,
@@ -459,63 +568,62 @@ body {
 
   color: white;
 
-  background:
-    radial-gradient(
-      circle at 20% 10%,
-      rgba(255,255,255,.10),
-      transparent 30%
-    ),
-    radial-gradient(
-      circle at 90% 80%,
-      rgba(255,0,120,.10),
-      transparent 35%
-    ),
-    #090909;
+  background: #080808;
 }
 
 /* ========================================
-   FONDO ANIMADO
+   FONDO
 ======================================== */
 
 .background {
 
   position: absolute;
 
-  inset: -100px;
+  width: 950px;
+  height: 1150px;
+
+  left: -115px;
+  top: -125px;
 
   background:
 
     radial-gradient(
-      circle at 20% 25%,
-      rgba(255,255,255,.18),
-      transparent 24%
+      circle at 20% 20%,
+      rgba(255,255,255,.20),
+      transparent 23%
     ),
 
     radial-gradient(
-      circle at 80% 70%,
-      rgba(255,70,150,.18),
+      circle at 85% 25%,
+      rgba(255,40,130,.18),
+      transparent 28%
+    ),
+
+    radial-gradient(
+      circle at 70% 85%,
+      rgba(80,120,255,.20),
       transparent 30%
     ),
 
     radial-gradient(
-      circle at 50% 100%,
-      rgba(80,130,255,.16),
-      transparent 32%
+      circle at 25% 80%,
+      rgba(180,60,255,.13),
+      transparent 28%
     ),
 
     linear-gradient(
       135deg,
-      #050505,
-      #171717,
-      #080808,
-      #141414
+      #030303,
+      #161616,
+      #070707,
+      #191919
     );
 
   filter:
-    blur(35px);
+    blur(28px);
 
   transform:
-    scale(1.2);
+    scale(1.15);
 
   will-change:
     transform;
@@ -532,9 +640,7 @@ body {
   border-radius: 50%;
 
   filter:
-    blur(35px);
-
-  opacity: .55;
+    blur(45px);
 
   will-change:
     transform;
@@ -542,11 +648,11 @@ body {
 
 .orb1 {
 
-  width: 280px;
-  height: 280px;
+  width: 300px;
+  height: 300px;
 
-  left: -100px;
-  top: 80px;
+  left: -120px;
+  top: 100px;
 
   background:
     rgba(255,255,255,.12);
@@ -558,26 +664,26 @@ body {
   height: 330px;
 
   right: -130px;
-  bottom: 120px;
+  bottom: 100px;
 
   background:
-    rgba(255,40,130,.13);
+    rgba(255,30,130,.12);
 }
 
 .orb3 {
 
-  width: 240px;
-  height: 240px;
+  width: 250px;
+  height: 250px;
 
-  left: 220px;
+  left: 230px;
   top: 330px;
 
   background:
-    rgba(70,120,255,.10);
+    rgba(70,100,255,.10);
 }
 
 /* ========================================
-   OVERLAY
+   OSCURIDAD
 ======================================== */
 
 .dark {
@@ -590,43 +696,41 @@ body {
     linear-gradient(
       180deg,
       rgba(0,0,0,.12),
-      rgba(0,0,0,.25) 40%,
-      rgba(0,0,0,.86) 88%,
-      rgba(0,0,0,.97)
+      rgba(0,0,0,.25) 42%,
+      rgba(0,0,0,.70) 72%,
+      rgba(0,0,0,.96)
     );
 }
 
 /* ========================================
-   LÍNEA DE LUZ
+   LUZ
 ======================================== */
 
 .light {
 
   position: absolute;
 
-  width: 170px;
+  width: 160px;
   height: 1400px;
 
   top: -260px;
-  left: -400px;
+  left: -420px;
 
   transform:
-    rotate(25deg);
+    rotate(24deg);
 
   background:
     linear-gradient(
       90deg,
       transparent,
       rgba(255,255,255,.04),
-      rgba(255,255,255,.28),
+      rgba(255,255,255,.30),
       rgba(255,255,255,.04),
       transparent
     );
 
   filter:
-    blur(20px);
-
-  opacity: .8;
+    blur(18px);
 
   will-change:
     left;
@@ -640,13 +744,13 @@ body {
 
   position: absolute;
 
-  inset: 11px;
+  inset: 10px;
 
-  border-radius: 34px;
+  border-radius: 35px;
 
   border:
     1px solid
-    rgba(255,255,255,.22);
+    rgba(255,255,255,.23);
 
   box-shadow:
     inset 0 0 35px
@@ -666,13 +770,15 @@ body {
 
   inset: 0;
 
-  padding: 34px 36px;
+  padding:
+    34px 36px;
 
   display: flex;
 
   flex-direction: column;
 
-  justify-content: space-between;
+  justify-content:
+    space-between;
 }
 
 /* ========================================
@@ -688,8 +794,6 @@ body {
   justify-content:
     space-between;
 
-  opacity: 1;
-
   will-change:
     transform,
     opacity;
@@ -701,7 +805,12 @@ body {
 
   font-weight: 900;
 
-  letter-spacing: -.5px;
+  letter-spacing:
+    -.5px;
+
+  text-shadow:
+    0 4px 20px
+    rgba(0,0,0,.8);
 }
 
 .creator {
@@ -721,17 +830,18 @@ body {
   padding:
     10px 15px;
 
-  border-radius: 999px;
+  border-radius:
+    999px;
 
   background:
-    rgba(255,255,255,.09);
+    rgba(255,255,255,.10);
 
   border:
     1px solid
     rgba(255,255,255,.20);
 
   backdrop-filter:
-    blur(20px);
+    blur(18px);
 
   font-size: 11px;
 
@@ -744,14 +854,12 @@ body {
 
 .center {
 
-  width: 100%;
+  margin-top: auto;
 
-  margin-top: 15px;
-  margin-bottom: 15px;
+  margin-bottom: auto;
 
   will-change:
-    transform,
-    opacity;
+    transform;
 }
 
 /* ========================================
@@ -769,15 +877,15 @@ body {
 
   border-radius: 30px;
 
-  border:
-    1px solid
-    rgba(255,255,255,.25);
-
   background: #111;
 
+  border:
+    1px solid
+    rgba(255,255,255,.26);
+
   box-shadow:
-    0 28px 70px
-    rgba(0,0,0,.72);
+    0 30px 75px
+    rgba(0,0,0,.75);
 
   will-change:
     transform;
@@ -800,7 +908,7 @@ body {
 }
 
 /* ========================================
-   MINIATURA OSCURA
+   OSCURECER MINIATURA
 ======================================== */
 
 .thumbDark {
@@ -812,31 +920,31 @@ body {
   background:
     linear-gradient(
       180deg,
-      transparent 45%,
-      rgba(0,0,0,.35)
+      transparent 40%,
+      rgba(0,0,0,.38)
     );
 }
 
 /* ========================================
-   BRILLO MINIATURA
+   REFLEJO
 ======================================== */
 
 .shine {
 
   position: absolute;
 
-  top: 0;
-  bottom: 0;
+  top: -50px;
+  bottom: -50px;
 
-  width: 180px;
+  left: -250px;
 
-  left: -230px;
+  width: 170px;
 
   background:
     linear-gradient(
       90deg,
       transparent,
-      rgba(255,255,255,.28),
+      rgba(255,255,255,.35),
       transparent
     );
 
@@ -851,7 +959,7 @@ body {
 }
 
 /* ========================================
-   TEXTO
+   AUTOR
 ======================================== */
 
 .author {
@@ -863,19 +971,26 @@ body {
   font-weight: 900;
 
   text-shadow:
-    0 5px 20px
-    rgba(0,0,0,.9);
+    0 5px 22px
+    rgba(0,0,0,.95);
+
+  will-change:
+    transform;
 }
 
 .nickname {
 
   margin-top: 4px;
 
+  font-size: 14px;
+
   color:
     rgba(255,255,255,.55);
-
-  font-size: 14px;
 }
+
+/* ========================================
+   DESCRIPCIÓN
+======================================== */
 
 .description {
 
@@ -883,7 +998,7 @@ body {
 
   font-size: 18px;
 
-  line-height: 1.3;
+  line-height: 1.30;
 
   font-weight: 600;
 
@@ -893,11 +1008,11 @@ body {
 
   text-shadow:
     0 4px 18px
-    rgba(0,0,0,.9);
+    rgba(0,0,0,.95);
 }
 
 /* ========================================
-   ESTADÍSTICAS
+   STATS
 ======================================== */
 
 .stats {
@@ -917,11 +1032,11 @@ body {
   border-radius: 14px;
 
   background:
-    rgba(0,0,0,.40);
+    rgba(0,0,0,.42);
 
   border:
     1px solid
-    rgba(255,255,255,.15);
+    rgba(255,255,255,.16);
 
   backdrop-filter:
     blur(18px);
@@ -954,8 +1069,7 @@ body {
     rgba(255,255,255,.13);
 
   will-change:
-    transform,
-    opacity;
+    transform;
 }
 
 .url {
@@ -986,7 +1100,7 @@ body {
 
   border:
     1px solid
-    rgba(255,255,255,.12);
+    rgba(255,255,255,.13);
 
   font-size: 12px;
 
@@ -1109,12 +1223,13 @@ body {
       await page.setContent(
         html,
         {
-          waitUntil: 'networkidle0'
+          waitUntil:
+            'networkidle0'
         }
       )
 
       // ====================================
-      // CREAR 120 FRAMES
+      // GENERAR FRAMES
       // ====================================
 
       for (
@@ -1124,11 +1239,12 @@ body {
       ) {
 
         const progreso =
-          i / (FRAMES - 1)
+          i /
+          (FRAMES - 1)
 
         const tiempo =
           progreso *
-          DURACION_CARD
+          CARD_DURATION
 
         await page.evaluate(
           ({
@@ -1197,24 +1313,26 @@ body {
               )
 
             // ==============================
-            // TIEMPO
+            // CICLO
             // ==============================
 
             const a =
               tiempo *
               Math.PI *
               2 /
-              DURACION_CARD
+              5
 
             // ==============================
             // FONDO
             // ==============================
 
             const bgX =
-              Math.sin(a) * 35
+              Math.sin(a) *
+              35
 
             const bgY =
-              Math.cos(a * .8) * 25
+              Math.cos(a * .8) *
+              25
 
             const bgScale =
               1.15 +
@@ -1223,44 +1341,65 @@ body {
               ) * .035
 
             background.style.transform =
-              `translate(${bgX}px, ${bgY}px) scale(${bgScale})`
+              `
+              translate(
+                ${bgX}px,
+                ${bgY}px
+              )
+              scale(${bgScale})
+              `
 
             // ==============================
-            // ORBES
+            // ORB 1
             // ==============================
 
             orb1.style.transform =
-              `translate(
-                ${Math.sin(a * 1.4) * 120}px,
+              `
+              translate(
+                ${Math.sin(a * 1.3) * 120}px,
                 ${Math.cos(a) * 80}px
-              ) scale(
+              )
+              scale(
                 ${1 + Math.sin(a) * .12}
-              )`
+              )
+              `
+
+            // ==============================
+            // ORB 2
+            // ==============================
 
             orb2.style.transform =
-              `translate(
+              `
+              translate(
                 ${Math.cos(a * 1.1) * 100}px,
                 ${Math.sin(a * .8) * 100}px
-              ) scale(
+              )
+              scale(
                 ${1 + Math.cos(a) * .15}
-              )`
+              )
+              `
+
+            // ==============================
+            // ORB 3
+            // ==============================
 
             orb3.style.transform =
-              `translate(
+              `
+              translate(
                 ${Math.sin(a * .7) * 90}px,
                 ${Math.cos(a * 1.2) * 70}px
-              )`
+              )
+              `
 
             // ==============================
             // LUZ
             // ==============================
 
-            const lightX =
-              -450 +
-              progreso * 1150
-
             light.style.left =
-              `${lightX}px`
+              `${
+                -420 +
+                progreso * 1050
+              }px`
 
             // ==============================
             // MINIATURA
@@ -1276,7 +1415,14 @@ body {
               Math.sin(a) * 5
 
             thumbnail.style.transform =
-              `translateY(${thumbY}px) scale(${thumbScale})`
+              `
+              translateY(
+                ${thumbY}px
+              )
+              scale(
+                ${thumbScale}
+              )
+              `
 
             // ==============================
             // IMAGEN
@@ -1295,49 +1441,58 @@ body {
               Math.cos(a * .9) * 7
 
             image.style.transform =
-              `translate(
+              `
+              translate(
                 ${imageX}px,
                 ${imageY}px
-              ) scale(${imageScale})`
+              )
+              scale(
+                ${imageScale}
+              )
+              `
 
             // ==============================
             // SHINE
             // ==============================
 
-            const shineX =
-              -230 +
-              progreso * 900
-
             shine.style.left =
-              `${shineX}px`
+              `${
+                -250 +
+                progreso * 900
+              }px`
 
             // ==============================
             // CENTRO
             // ==============================
 
-            const centerY =
-              Math.sin(a * .8) * 4
-
             center.style.transform =
-              `translateY(${centerY}px)`
+              `
+              translateY(
+                ${Math.sin(a * .8) * 4}px
+              )
+              `
 
             // ==============================
             // HEADER
             // ==============================
 
             header.style.transform =
-              `translateY(
+              `
+              translateY(
                 ${Math.cos(a) * 3}px
-              )`
+              )
+              `
 
             // ==============================
             // FOOTER
             // ==============================
 
             footer.style.transform =
-              `translateY(
+              `
+              translateY(
                 ${Math.sin(a * .9) * 3}px
-              )`
+              )
+              `
 
             // ==============================
             // BORDE
@@ -1352,10 +1507,20 @@ body {
             border.style.boxShadow =
               `
               inset 0 0 38px
-              rgba(255,255,255,${glow}),
+              rgba(
+                255,
+                255,
+                255,
+                ${glow}
+              ),
 
               0 0 38px
-              rgba(255,255,255,${glow})
+              rgba(
+                255,
+                255,
+                255,
+                ${glow}
+              )
               `
 
           },
@@ -1380,7 +1545,9 @@ body {
             `frame-${String(i).padStart(4, '0')}.png`
           )
 
-        await sharp(screenshot)
+        await sharp(
+          screenshot
+        )
           .resize(
             CARD_WIDTH,
             CARD_HEIGHT,
@@ -1418,7 +1585,7 @@ body {
       ),
 
       '-t',
-      String(DURACION_CARD),
+      String(CARD_DURATION),
 
       '-c:v',
       'libx264',
@@ -1442,7 +1609,9 @@ body {
     ])
 
     return {
-      file: outputVideo,
+      file:
+        outputVideo,
+
       tempDir
     }
 
@@ -1471,6 +1640,7 @@ async function enviarVideoTikTok(
     video.video?.download
 
   if (!urlVideo) {
+
     throw new Error(
       'Sin URL de video'
     )
@@ -1490,7 +1660,7 @@ async function enviarVideoTikTok(
       )
 
     // ======================================
-    // ENVIAR TARJETA ANIMADA
+    // TARJETA ANIMADA
     // ======================================
 
     await conn.sendMessage(
@@ -1517,35 +1687,52 @@ async function enviarVideoTikTok(
     )
 
     // ======================================
-    // ENVIAR TIKTOK ORIGINAL
+    // VIDEO ORIGINAL
     // SIN COMPRESIÓN
     // ======================================
 
     const caption =
-      `🎬 *@${video.author?.uniqueId || '?'}* ` +
-      `(${video.author?.nickname || ''})\n\n` +
+      `🎬 *@${
+        video.author?.uniqueId || '?'
+      }* ` +
+      `(${
+        video.author?.nickname || ''
+      })\n\n` +
 
-      `📝 ${video.desc || 'Sin descripción'}\n\n` +
+      `📝 ${
+        video.desc ||
+        'Sin descripción'
+      }\n\n` +
 
-      `👁️ ${formatearNumero(
-        video.stats?.playCount
-      )} vistas\n` +
+      `👁️ ${
+        formatearNumero(
+          video.stats?.playCount
+        )
+      } vistas\n` +
 
-      `❤️ ${formatearNumero(
-        video.stats?.diggCount
-      )} likes\n` +
+      `❤️ ${
+        formatearNumero(
+          video.stats?.diggCount
+        )
+      } likes\n` +
 
-      `💬 ${formatearNumero(
-        video.stats?.commentCount
-      )} comentarios\n\n` +
+      `💬 ${
+        formatearNumero(
+          video.stats?.commentCount
+        )
+      } comentarios\n\n` +
 
-      `🔗 ${video.url || urlVideo}`
+      `🔗 ${
+        video.url ||
+        urlVideo
+      }`
 
     return conn.sendMessage(
       m.chat,
       {
         video: {
-          url: urlVideo
+          url:
+            urlVideo
         },
 
         mimetype:
@@ -1561,7 +1748,10 @@ async function enviarVideoTikTok(
 
   } finally {
 
-    if (tarjeta?.tempDir) {
+    if (
+      tarjeta?.tempDir
+    ) {
+
       eliminarDirectorio(
         tarjeta.tempDir
       )
@@ -1570,7 +1760,7 @@ async function enviarVideoTikTok(
 }
 
 // ==========================================
-// LISTA TIKTOK
+// LISTA
 // ==========================================
 
 async function enviarListaTikTok(
@@ -1607,31 +1797,44 @@ async function enviarListaTikTok(
             `${videos.length} video(s)`,
 
           filas:
-            videos.map((v, i) => ({
+            videos.map(
+              (v, i) => ({
 
-              titulo:
-                `@${v.author?.uniqueId || '?'} · ` +
-                `${v.desc?.slice(
-                  0,
-                  40
-                ) || 'Sin desc'}`,
+                titulo:
+                  `@${
+                    v.author?.uniqueId ||
+                    '?'
+                  } · ${
+                    v.desc?.slice(
+                      0,
+                      40
+                    ) ||
+                    'Sin desc'
+                  }`,
 
-              id:
-                `${usedPrefix}tiktokget ${i}`,
+                id:
+                  `${usedPrefix}tiktokget ${i}`,
 
-              descripcion:
-                `👁️ ${formatearNumero(
-                  v.stats?.playCount
-                )} · ` +
+                descripcion:
+                  `👁️ ${
+                    formatearNumero(
+                      v.stats?.playCount
+                    )
+                  } · ` +
 
-                `❤️ ${formatearNumero(
-                  v.stats?.diggCount
-                )} · ` +
+                  `❤️ ${
+                    formatearNumero(
+                      v.stats?.diggCount
+                    )
+                  } · ` +
 
-                `⏱️ ${formatearDuracion(
-                  v.video?.duration
-                )}`
-            }))
+                  `⏱️ ${
+                    formatearDuracion(
+                      v.video?.duration
+                    )
+                  }`
+              })
+            )
         }
       ]
     }
@@ -1696,7 +1899,8 @@ let handler = async (
   limpiarVencidas()
 
   const comando =
-    (command || '').toLowerCase()
+    (command || '')
+      .toLowerCase()
 
   const clave =
     claveBusqueda(m)
@@ -1705,13 +1909,18 @@ let handler = async (
   // TIKTOKGET
   // ========================================
 
-  if (comando === 'tiktokget') {
+  if (
+    comando ===
+    'tiktokget'
+  ) {
 
     const indice =
       Number(args[0])
 
     const pendiente =
-      pendientes.get(clave)
+      pendientes.get(
+        clave
+      )
 
     if (
       !pendiente ||
@@ -1735,7 +1944,9 @@ let handler = async (
     }
 
     const video =
-      pendiente.videos[indice]
+      pendiente.videos[
+        indice
+      ]
 
     try {
 
@@ -1749,7 +1960,9 @@ let handler = async (
         pendiente.videos.length -
         (indice + 1)
 
-      if (restantes > 0) {
+      if (
+        restantes > 0
+      ) {
 
         return enviarBotonMas(
           conn,
@@ -1788,10 +2001,15 @@ let handler = async (
   // TIKTOKMAS
   // ========================================
 
-  if (comando === 'tiktokmas') {
+  if (
+    comando ===
+    'tiktokmas'
+  ) {
 
     const pendiente =
-      pendientes.get(clave)
+      pendientes.get(
+        clave
+      )
 
     if (
       !pendiente ||
@@ -1872,7 +2090,9 @@ let handler = async (
         query
       )
 
-    if (!videos.length) {
+    if (
+      !videos.length
+    ) {
 
       return conn.sendMessage(
         m.chat,
@@ -1939,7 +2159,7 @@ let handler = async (
 }
 
 // ==========================================
-// CONFIGURACIÓN DEL COMANDO
+// CONFIGURACIÓN
 // ==========================================
 
 handler.help = [
