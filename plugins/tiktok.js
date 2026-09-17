@@ -16,6 +16,10 @@ if (!global.tiktokPendientes) {
 
 const pendientes = global.tiktokPendientes
 
+/* ═══════════════════════════════════════
+   LIMPIAR BÚSQUEDAS VENCIDAS
+═══════════════════════════════════════ */
+
 function limpiarVencidas() {
   const ahora = Date.now()
 
@@ -25,6 +29,10 @@ function limpiarVencidas() {
     }
   }
 }
+
+/* ═══════════════════════════════════════
+   CLAVE DE USUARIO
+═══════════════════════════════════════ */
 
 function claveBusqueda(m) {
   return `${m.chat}_${m.senderNumero || m.sender}`
@@ -71,6 +79,10 @@ async function orbitFetch(path, params = {}) {
   return res.json()
 }
 
+/* ═══════════════════════════════════════
+   BUSCAR TIKTOK
+═══════════════════════════════════════ */
+
 async function buscarTikTok(query) {
   const data = await orbitFetch(
     'tiktok-search',
@@ -89,6 +101,10 @@ async function buscarTikTok(query) {
 
   return data.results
 }
+
+/* ═══════════════════════════════════════
+   DESCARGAR TIKTOK
+═══════════════════════════════════════ */
 
 async function descargarTikTokPorUrl(url) {
   const data = await orbitFetch(
@@ -110,7 +126,7 @@ async function descargarTikTokPorUrl(url) {
 }
 
 /* ═══════════════════════════════════════
-   FORMATOS
+   FORMATEAR NÚMEROS
 ═══════════════════════════════════════ */
 
 function formatearNumero(n) {
@@ -131,6 +147,10 @@ function formatearNumero(n) {
   return String(n)
 }
 
+/* ═══════════════════════════════════════
+   FORMATEAR DURACIÓN
+═══════════════════════════════════════ */
+
 function formatearDuracion(seg) {
   const s = Number(seg) || 0
 
@@ -142,6 +162,10 @@ function formatearDuracion(seg) {
     : `${r}s`
 }
 
+/* ═══════════════════════════════════════
+   ESCAPAR HTML
+═══════════════════════════════════════ */
+
 function escapeHTML(text) {
   return String(text || '')
     .replace(/&/g, '&amp;')
@@ -152,11 +176,11 @@ function escapeHTML(text) {
 }
 
 /* ═══════════════════════════════════════
-   GENERAR GIF ANIMADO
+   GENERAR TARJETA GIF
 ═══════════════════════════════════════ */
 
 async function generarTarjetaTikTok(video) {
-  let browser
+  let browser = null
 
   try {
     const author =
@@ -242,8 +266,8 @@ body {
   margin: 0;
   padding: 0;
 
-  width: ${WIDTH}px;
-  height: ${HEIGHT}px;
+  width: 900px;
+  height: 1050px;
 
   overflow: hidden;
 
@@ -278,14 +302,14 @@ body {
   background:
     radial-gradient(
       circle at var(--x1) var(--y1),
-      rgba(255, 0, 80, .24),
-      transparent 32%
+      rgba(255, 0, 80, .25),
+      transparent 34%
     ),
 
     radial-gradient(
       circle at var(--x2) var(--y2),
       rgba(0, 242, 234, .20),
-      transparent 34%
+      transparent 36%
     ),
 
     #101010;
@@ -296,7 +320,7 @@ body {
 
   box-shadow:
     0 30px 80px
-    rgba(0,0,0,.70);
+    rgba(0,0,0,.75);
 
   color: white;
 }
@@ -305,19 +329,19 @@ body {
 
   position: absolute;
 
-  width: 300px;
-  height: 300px;
+  width: 350px;
+  height: 350px;
 
   border-radius: 50%;
 
   background:
     radial-gradient(
       circle,
-      rgba(255,0,80,.20),
+      rgba(255,0,80,.18),
       transparent 70%
     );
 
-  filter: blur(25px);
+  filter: blur(30px);
 
   transform:
     translate(
@@ -425,6 +449,10 @@ body {
   gap: 15px;
 
   margin-top: 24px;
+
+  position: relative;
+
+  z-index: 3;
 }
 
 .avatar {
@@ -499,6 +527,10 @@ body {
   font-size: 17px;
 
   line-height: 1.4;
+
+  position: relative;
+
+  z-index: 3;
 }
 
 .stats {
@@ -511,11 +543,16 @@ body {
   gap: 14px;
 
   margin-top: 17px;
+
+  position: relative;
+
+  z-index: 3;
 }
 
 .stat {
 
-  padding: 15px 8px;
+  padding:
+    15px 8px;
 
   border-radius: 18px;
 
@@ -552,7 +589,6 @@ body {
   position: absolute;
 
   right: 50px;
-
   top: 570px;
 
   z-index: 5;
@@ -563,7 +599,7 @@ body {
   border-radius: 12px;
 
   background:
-    rgba(0,0,0,.75);
+    rgba(0,0,0,.78);
 
   font-size: 16px;
 
@@ -697,7 +733,11 @@ body {
       }
     )
 
-    // Esperar imágenes
+    /*
+     * Esperar a que la portada
+     * termine de cargar.
+     */
+
     await page.evaluate(async () => {
 
       const images =
@@ -720,6 +760,7 @@ body {
 
               img.onerror =
                 resolve
+
             }
           )
         })
@@ -728,7 +769,7 @@ body {
     })
 
     /*
-     * GIF
+     * Crear GIF
      */
 
     const encoder =
@@ -737,28 +778,30 @@ body {
         HEIGHT
       )
 
-    encoder.setDelay(120)
     encoder.setRepeat(0)
+
+    encoder.setDelay(100)
+
     encoder.setQuality(8)
 
     encoder.start()
 
     /*
-     * Animación:
-     * mueve el brillo y hace
-     * un pequeño efecto de zoom.
+     * 24 frames
+     * = aproximadamente
+     * 2.4 segundos.
      */
 
-    const frames = 24
+    const FRAMES = 24
 
     for (
       let i = 0;
-      i < frames;
+      i < FRAMES;
       i++
     ) {
 
       const progress =
-        i / frames
+        i / FRAMES
 
       const angle =
         progress *
@@ -833,6 +876,10 @@ body {
             `${gy}px`
           )
 
+          /*
+           * Zoom muy suave.
+           */
+
           const scale =
             1 +
             Math.sin(
@@ -886,7 +933,7 @@ body {
 }
 
 /* ═══════════════════════════════════════
-   LISTA
+   LISTA DE TIKTOK
 ═══════════════════════════════════════ */
 
 async function enviarListaTikTok(
@@ -949,7 +996,7 @@ async function enviarListaTikTok(
 }
 
 /* ═══════════════════════════════════════
-   BOTÓN MÁS
+   BOTÓN MÁS VIDEOS
 ═══════════════════════════════════════ */
 
 async function enviarBotonMas(
@@ -992,7 +1039,7 @@ async function enviarBotonMas(
 }
 
 /* ═══════════════════════════════════════
-   ENVIAR TARJETA + VIDEO
+   ENVIAR TARJETA GIF + VIDEO
 ═══════════════════════════════════════ */
 
 async function enviarVideoTikTok(
@@ -1026,6 +1073,7 @@ async function enviarVideoTikTok(
         ? ` (${nickname})`
         : ''
     ) +
+
     `\n\n` +
 
     `📝 ${video.desc || 'Sin descripción'}\n\n` +
@@ -1045,7 +1093,7 @@ async function enviarVideoTikTok(
     `🔗 ${video.url || ''}`
 
   /*
-   * Generar tarjeta animada
+   * TARJETA GIF
    */
 
   try {
@@ -1058,36 +1106,34 @@ async function enviarVideoTikTok(
     await conn.sendMessage(
       m.chat,
       {
-        document:
+
+        video:
           tarjeta,
 
-        mimetype:
-          'image/gif',
-
-        fileName:
-          'tiktok.gif',
+        gifPlayback:
+          true,
 
         caption:
-          `🎬 *TikTok*\n\n` +
-          `@${author}\n` +
-          `Creator · Matthieu`
+          ''
+
       },
       {
-        quoted: m.raw
+        quoted:
+          m.raw
       }
     )
 
-  } catch (e) {
+  } catch (error) {
 
     console.error(
       '[TIKTOK CARD]',
-      e
+      error
     )
 
   }
 
   /*
-   * Enviar video
+   * VIDEO TIKTOK
    */
 
   return conn.sendMessage(
@@ -1095,7 +1141,8 @@ async function enviarVideoTikTok(
     {
 
       video: {
-        url: urlVideo
+        url:
+          urlVideo
       },
 
       mimetype:
@@ -1105,7 +1152,8 @@ async function enviarVideoTikTok(
 
     },
     {
-      quoted: m.raw
+      quoted:
+        m.raw
     }
   )
 }
@@ -1134,7 +1182,9 @@ let handler = async (
   const clave =
     claveBusqueda(m)
 
-  /* TIKTOKGET */
+  /* ═════════════════════════════
+     TIKTOKGET
+  ═════════════════════════════ */
 
   if (
     comando === 'tiktokget'
@@ -1161,7 +1211,8 @@ let handler = async (
             `> Usa ${usedPrefix}tiktok de nuevo.`
         },
         {
-          quoted: m.raw
+          quoted:
+            m.raw
         }
       )
     }
@@ -1194,6 +1245,8 @@ let handler = async (
         )
       }
 
+      return
+
     } catch (e) {
 
       console.error(
@@ -1209,15 +1262,16 @@ let handler = async (
             `> ${e.message}`
         },
         {
-          quoted: m.raw
+          quoted:
+            m.raw
         }
       )
     }
-
-    return
   }
 
-  /* TIKTOKMAS */
+  /* ═════════════════════════════
+     TIKTOKMAS
+  ═════════════════════════════ */
 
   if (
     comando === 'tiktokmas'
@@ -1239,7 +1293,8 @@ let handler = async (
             `> Usa ${usedPrefix}tiktok de nuevo.`
         },
         {
-          quoted: m.raw
+          quoted:
+            m.raw
         }
       )
     }
@@ -1253,7 +1308,9 @@ let handler = async (
     )
   }
 
-  /* BÚSQUEDA */
+  /* ═════════════════════════════
+     SIN TEXTO
+  ═════════════════════════════ */
 
   if (
     !text ||
@@ -1265,18 +1322,23 @@ let handler = async (
       {
         text:
           `🎬 *TikTok Search*\n\n` +
-          `Escribe qué quieres buscar.\n\n` +
+          `Escribe qué buscar.\n\n` +
           `📌 Ejemplo:\n` +
           `${usedPrefix}tiktok goku`
       },
       {
-        quoted: m.raw
+        quoted:
+          m.raw
       }
     )
   }
 
   const query =
     text.trim()
+
+  /* ═════════════════════════════
+     BUSCAR
+  ═════════════════════════════ */
 
   try {
 
@@ -1288,12 +1350,15 @@ let handler = async (
           `> ${query}`
       },
       {
-        quoted: m.raw
+        quoted:
+          m.raw
       }
     )
 
     const videos =
-      await buscarTikTok(query)
+      await buscarTikTok(
+        query
+      )
 
     if (
       !videos.length
@@ -1307,7 +1372,8 @@ let handler = async (
             `> ${query}`
         },
         {
-          quoted: m.raw
+          quoted:
+            m.raw
         }
       )
     }
@@ -1322,7 +1388,9 @@ let handler = async (
       clave,
       {
         query,
-        videos: resultados,
+        videos:
+          resultados,
+
         expira:
           Date.now() +
           TIEMPO_SELECCION_MS
@@ -1352,11 +1420,16 @@ let handler = async (
           `> ${error.message}`
       },
       {
-        quoted: m.raw
+        quoted:
+          m.raw
       }
     )
   }
 }
+
+/* ═══════════════════════════════════════
+   CONFIG
+═══════════════════════════════════════ */
 
 handler.help = [
   'tiktok <búsqueda>'
