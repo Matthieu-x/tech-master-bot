@@ -14,6 +14,10 @@ const ORBIT_IP = process.env.ORBIT_IP || '10.25.121.79'
 const TIEMPO_SELECCION_MS = 5 * 60 * 1000
 const MAX_RESULTADOS = 10
 
+// ==========================================
+// TARJETA
+// ==========================================
+
 const CARD_WIDTH = 720
 const CARD_HEIGHT = 900
 
@@ -21,11 +25,19 @@ const FPS = 12
 const DURACION_CARD = 10
 const FRAMES = FPS * DURACION_CARD
 
+// ==========================================
+// PENDIENTES
+// ==========================================
+
 if (!global.tiktokPendientes) {
   global.tiktokPendientes = new Map()
 }
 
 const pendientes = global.tiktokPendientes
+
+// ==========================================
+// LIMPIAR BÚSQUEDAS VENCIDAS
+// ==========================================
 
 function limpiarVencidas() {
   const ahora = Date.now()
@@ -37,9 +49,17 @@ function limpiarVencidas() {
   }
 }
 
+// ==========================================
+// CLAVE
+// ==========================================
+
 function claveBusqueda(m) {
   return `${m.chat}_${m.senderNumero || m.sender}`
 }
+
+// ==========================================
+// ESCAPAR HTML
+// ==========================================
 
 function escapeHtml(text = '') {
   return String(text)
@@ -50,8 +70,16 @@ function escapeHtml(text = '') {
     .replace(/'/g, '&#039;')
 }
 
+// ==========================================
+// FORMATO DE NÚMEROS
+// ==========================================
+
 function formatearNumero(n) {
   n = Number(n) || 0
+
+  if (n >= 1000000000) {
+    return (n / 1000000000).toFixed(1) + 'B'
+  }
 
   if (n >= 1000000) {
     return (n / 1000000).toFixed(1) + 'M'
@@ -64,15 +92,26 @@ function formatearNumero(n) {
   return String(n)
 }
 
+// ==========================================
+// FORMATO DURACIÓN
+// ==========================================
+
 function formatearDuracion(seg) {
   const s = Number(seg) || 0
-  const m = Math.floor(s / 60)
-  const r = s % 60
 
-  return m > 0
-    ? `${m}m ${String(r).padStart(2, '0')}s`
-    : `${r}s`
+  const minutos = Math.floor(s / 60)
+  const segundos = s % 60
+
+  if (minutos > 0) {
+    return `${minutos}:${String(segundos).padStart(2, '0')}`
+  }
+
+  return `0:${String(segundos).padStart(2, '0')}`
 }
+
+// ==========================================
+// ORBIT API
+// ==========================================
 
 async function orbitFetch(apiPath, params = {}) {
   const qs = new URLSearchParams({
@@ -90,15 +129,21 @@ async function orbitFetch(apiPath, params = {}) {
 
   if (!res.ok) {
     if (res.status === 401) {
-      throw new Error('API key inválida o IP no registrada (401)')
+      throw new Error(
+        'API key inválida o IP no registrada (401)'
+      )
     }
 
     if (res.status === 403) {
-      throw new Error('IP bloqueada (403)')
+      throw new Error(
+        'IP bloqueada (403)'
+      )
     }
 
     if (res.status === 429) {
-      throw new Error('Se agotaron las solicitudes (429)')
+      throw new Error(
+        'Se agotaron las solicitudes (429)'
+      )
     }
 
     throw new Error(`HTTP ${res.status}`)
@@ -107,55 +152,96 @@ async function orbitFetch(apiPath, params = {}) {
   return res.json()
 }
 
+// ==========================================
+// BUSCAR TIKTOK
+// ==========================================
+
 async function buscarTikTok(query) {
-  const data = await orbitFetch('tiktok-search', { query })
+  const data = await orbitFetch(
+    'tiktok-search',
+    { query }
+  )
 
   if (
     !data ||
     data.status !== true ||
     !Array.isArray(data.results)
   ) {
-    throw new Error(data?.error || 'Respuesta inválida')
+    throw new Error(
+      data?.error || 'Respuesta inválida'
+    )
   }
 
   return data.results
 }
 
+// ==========================================
+// EJECUTAR FFMPEG
+// ==========================================
+
 function ejecutarFFmpeg(args) {
   return new Promise((resolve, reject) => {
-    const proceso = spawn(ffmpegPath, args)
+    const proceso = spawn(
+      ffmpegPath,
+      args
+    )
 
     let stderr = ''
 
-    proceso.stderr.on('data', data => {
-      stderr += data.toString()
-    })
+    proceso.stderr.on(
+      'data',
+      data => {
+        stderr += data.toString()
+      }
+    )
 
-    proceso.on('error', reject)
+    proceso.on(
+      'error',
+      reject
+    )
 
-    proceso.on('close', code => {
-      if (code === 0) {
-        resolve()
-      } else {
+    proceso.on(
+      'close',
+      code => {
+
+        if (code === 0) {
+          resolve()
+          return
+        }
+
         reject(
           new Error(
             `FFmpeg terminó con código ${code}\n${stderr}`
           )
         )
       }
-    })
+    )
   })
 }
 
+// ==========================================
+// ELIMINAR TEMPORALES
+// ==========================================
+
 function eliminarDirectorio(dir) {
   try {
-    if (dir && fs.existsSync(dir)) {
-      fs.rmSync(dir, {
-        recursive: true,
-        force: true
-      })
+
+    if (
+      dir &&
+      fs.existsSync(dir)
+    ) {
+
+      fs.rmSync(
+        dir,
+        {
+          recursive: true,
+          force: true
+        }
+      )
     }
+
   } catch (e) {
+
     console.error(
       '[TIKTOK] Error limpiando temporales:',
       e.message
@@ -163,27 +249,45 @@ function eliminarDirectorio(dir) {
   }
 }
 
-/*
-========================================
-CREAR TARJETA ANIMADA
-========================================
-*/
+// ==========================================
+// DESCARGAR MINIATURA
+// ==========================================
+
+async function descargarMiniatura(url, destino) {
+
+  const res = await fetch(url)
+
+  if (!res.ok) {
+    throw new Error(
+      `No se pudo descargar la miniatura: HTTP ${res.status}`
+    )
+  }
+
+  const buffer =
+    Buffer.from(
+      await res.arrayBuffer()
+    )
+
+  await sharp(buffer)
+    .resize(
+      900,
+      600,
+      {
+        fit: 'cover',
+        position: 'attention'
+      }
+    )
+    .jpeg({
+      quality: 90
+    })
+    .toFile(destino)
+}
+
+// ==========================================
+// CREAR TARJETA ANIMADA
+// ==========================================
 
 async function crearTarjetaTikTok(video) {
-  const tempDir = fs.mkdtempSync(
-    path.join(os.tmpdir(), 'tiktok-card-')
-  )
-
-  const framesDir = path.join(tempDir, 'frames')
-
-  fs.mkdirSync(framesDir, {
-    recursive: true
-  })
-
-  const outputVideo = path.join(
-    tempDir,
-    'card.mp4'
-  )
 
   const cover =
     video.video?.cover ||
@@ -191,57 +295,130 @@ async function crearTarjetaTikTok(video) {
     video.video?.dynamicCover
 
   if (!cover) {
-    eliminarDirectorio(tempDir)
-    throw new Error('El TikTok no proporcionó miniatura')
+    throw new Error(
+      'El TikTok no proporcionó miniatura'
+    )
   }
 
-  const author =
-    video.author?.uniqueId || '?'
+  const tempDir =
+    fs.mkdtempSync(
+      path.join(
+        os.tmpdir(),
+        'tiktok-matthieu-'
+      )
+    )
 
-  const nickname =
-    video.author?.nickname || ''
+  const framesDir =
+    path.join(
+      tempDir,
+      'frames'
+    )
 
-  const descripcion =
-    video.desc || 'Sin descripción'
+  fs.mkdirSync(
+    framesDir,
+    {
+      recursive: true
+    }
+  )
 
-  const views =
-    formatearNumero(video.stats?.playCount)
+  const coverPath =
+    path.join(
+      tempDir,
+      'cover.jpg'
+    )
 
-  const likes =
-    formatearNumero(video.stats?.diggCount)
-
-  const comments =
-    formatearNumero(video.stats?.commentCount)
-
-  const duration =
-    formatearDuracion(video.video?.duration)
-
-  const url =
-    video.url || ''
-
-  const browser = await puppeteer.launch({
-    headless: true,
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu'
-    ]
-  })
+  const outputVideo =
+    path.join(
+      tempDir,
+      'card.mp4'
+    )
 
   try {
-    const page = await browser.newPage()
 
-    await page.setViewport({
-      width: CARD_WIDTH,
-      height: CARD_HEIGHT,
-      deviceScaleFactor: 1
-    })
+    // ======================================
+    // MINIATURA
+    // ======================================
 
-    const html = `
+    await descargarMiniatura(
+      cover,
+      coverPath
+    )
+
+    const coverBase64 =
+      fs.readFileSync(
+        coverPath
+      ).toString('base64')
+
+    const author =
+      video.author?.uniqueId || '?'
+
+    const nickname =
+      video.author?.nickname || ''
+
+    const descripcion =
+      video.desc ||
+      'Sin descripción'
+
+    const views =
+      formatearNumero(
+        video.stats?.playCount
+      )
+
+    const likes =
+      formatearNumero(
+        video.stats?.diggCount
+      )
+
+    const comments =
+      formatearNumero(
+        video.stats?.commentCount
+      )
+
+    const duration =
+      formatearDuracion(
+        video.video?.duration
+      )
+
+    const url =
+      video.url || ''
+
+    // ======================================
+    // PUPPETEER
+    // ======================================
+
+    const browser =
+      await puppeteer.launch({
+        headless: true,
+
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage'
+        ]
+      })
+
+    try {
+
+      const page =
+        await browser.newPage()
+
+      await page.setViewport({
+        width: CARD_WIDTH,
+        height: CARD_HEIGHT,
+        deviceScaleFactor: 1
+      })
+
+      // ====================================
+      // HTML
+      // ====================================
+
+      const html = `
 <!DOCTYPE html>
+
 <html>
+
 <head>
+
 <meta charset="UTF-8">
 
 <style>
@@ -252,170 +429,337 @@ async function crearTarjetaTikTok(video) {
 
 html,
 body {
+
   margin: 0;
   padding: 0;
-  width: ${CARD_WIDTH}px;
-  height: ${CARD_HEIGHT}px;
+
+  width: 720px;
+  height: 900px;
+
   overflow: hidden;
-  background: #000;
-  font-family: Arial, Helvetica, sans-serif;
+
+  background: transparent;
+
+  font-family:
+    Arial,
+    Helvetica,
+    sans-serif;
 }
 
 .card {
+
   position: relative;
+
   width: 720px;
   height: 900px;
+
   overflow: hidden;
-  border-radius: 40px;
+
+  border-radius: 42px;
+
   color: white;
-  background: #050505;
+
+  background:
+    radial-gradient(
+      circle at 20% 10%,
+      rgba(255,255,255,.10),
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at 90% 80%,
+      rgba(255,0,120,.10),
+      transparent 35%
+    ),
+    #090909;
 }
+
+/* ========================================
+   FONDO ANIMADO
+======================================== */
 
 .background {
+
   position: absolute;
+
   inset: -100px;
 
-  background-image:
-    url("${escapeHtml(cover)}");
+  background:
 
-  background-size: cover;
-  background-position: center;
+    radial-gradient(
+      circle at 20% 25%,
+      rgba(255,255,255,.18),
+      transparent 24%
+    ),
+
+    radial-gradient(
+      circle at 80% 70%,
+      rgba(255,70,150,.18),
+      transparent 30%
+    ),
+
+    radial-gradient(
+      circle at 50% 100%,
+      rgba(80,130,255,.16),
+      transparent 32%
+    ),
+
+    linear-gradient(
+      135deg,
+      #050505,
+      #171717,
+      #080808,
+      #141414
+    );
 
   filter:
-    blur(45px)
-    brightness(.25)
-    saturate(1.5);
+    blur(35px);
 
   transform:
-    scale(1.3)
-    translate(0px, 0px);
+    scale(1.2);
+
+  will-change:
+    transform;
 }
 
-.overlay {
+/* ========================================
+   ORBES
+======================================== */
+
+.orb {
+
   position: absolute;
+
+  border-radius: 50%;
+
+  filter:
+    blur(35px);
+
+  opacity: .55;
+
+  will-change:
+    transform;
+}
+
+.orb1 {
+
+  width: 280px;
+  height: 280px;
+
+  left: -100px;
+  top: 80px;
+
+  background:
+    rgba(255,255,255,.12);
+}
+
+.orb2 {
+
+  width: 330px;
+  height: 330px;
+
+  right: -130px;
+  bottom: 120px;
+
+  background:
+    rgba(255,40,130,.13);
+}
+
+.orb3 {
+
+  width: 240px;
+  height: 240px;
+
+  left: 220px;
+  top: 330px;
+
+  background:
+    rgba(70,120,255,.10);
+}
+
+/* ========================================
+   OVERLAY
+======================================== */
+
+.dark {
+
+  position: absolute;
+
   inset: 0;
 
   background:
     linear-gradient(
       180deg,
-      rgba(0,0,0,.08) 0%,
-      rgba(0,0,0,.12) 35%,
-      rgba(0,0,0,.60) 72%,
-      rgba(0,0,0,.98) 100%
+      rgba(0,0,0,.12),
+      rgba(0,0,0,.25) 40%,
+      rgba(0,0,0,.86) 88%,
+      rgba(0,0,0,.97)
     );
 }
 
-/* LUZ ANIMADA */
+/* ========================================
+   LÍNEA DE LUZ
+======================================== */
 
-.beam {
+.light {
+
   position: absolute;
 
-  width: 260px;
-  height: 1200px;
+  width: 170px;
+  height: 1400px;
 
+  top: -260px;
   left: -400px;
-  top: -150px;
 
   transform:
-    rotate(22deg);
+    rotate(25deg);
 
   background:
     linear-gradient(
       90deg,
       transparent,
-      rgba(255,255,255,.08),
-      rgba(255,255,255,.32),
-      rgba(255,255,255,.08),
+      rgba(255,255,255,.04),
+      rgba(255,255,255,.28),
+      rgba(255,255,255,.04),
       transparent
     );
 
-  filter: blur(22px);
+  filter:
+    blur(20px);
+
+  opacity: .8;
+
+  will-change:
+    left;
 }
 
-/* BORDE ANIMADO */
+/* ========================================
+   BORDE
+======================================== */
 
-.glow {
+.border {
+
   position: absolute;
-  inset: 8px;
+
+  inset: 11px;
 
   border-radius: 34px;
 
   border:
-    2px solid
-    rgba(255,255,255,.10);
+    1px solid
+    rgba(255,255,255,.22);
 
   box-shadow:
-    0 0 25px
-    rgba(255,255,255,.05);
+    inset 0 0 35px
+    rgba(255,255,255,.08);
+
+  will-change:
+    box-shadow;
 }
 
-/* CONTENIDO */
+/* ========================================
+   CONTENIDO
+======================================== */
 
 .content {
+
   position: absolute;
+
   inset: 0;
 
-  padding: 36px;
+  padding: 34px 36px;
 
   display: flex;
+
   flex-direction: column;
 
   justify-content: space-between;
 }
 
-/* HEADER */
+/* ========================================
+   HEADER
+======================================== */
 
 .header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
 
-  transform:
-    translateY(0px);
+  display: flex;
+
+  align-items: center;
+
+  justify-content:
+    space-between;
+
+  opacity: 1;
+
+  will-change:
+    transform,
+    opacity;
 }
 
-.brand {
-  font-size: 24px;
+.title {
+
+  font-size: 27px;
+
   font-weight: 900;
+
+  letter-spacing: -.5px;
 }
 
 .creator {
+
   margin-top: 5px;
+
   font-size: 13px;
-  color: rgba(255,255,255,.65);
+
+  color:
+    rgba(255,255,255,.58);
+
+  font-weight: 600;
 }
 
 .badge {
-  padding: 10px 16px;
+
+  padding:
+    10px 15px;
 
   border-radius: 999px;
 
   background:
-    rgba(255,255,255,.10);
+    rgba(255,255,255,.09);
 
   border:
     1px solid
-    rgba(255,255,255,.18);
+    rgba(255,255,255,.20);
 
-  font-size: 13px;
-  font-weight: 800;
+  backdrop-filter:
+    blur(20px);
 
-  backdrop-filter: blur(15px);
+  font-size: 11px;
+
+  font-weight: 900;
 }
 
-/* CENTRO */
+/* ========================================
+   CENTRO
+======================================== */
 
 .center {
-  margin-top: auto;
-  margin-bottom: auto;
 
-  transform:
-    translateY(0px);
+  width: 100%;
+
+  margin-top: 15px;
+  margin-bottom: 15px;
+
+  will-change:
+    transform,
+    opacity;
 }
 
-/* MINIATURA */
+/* ========================================
+   MINIATURA
+======================================== */
 
 .thumbnail {
+
   position: relative;
 
   width: 648px;
@@ -425,42 +769,41 @@ body {
 
   border-radius: 30px;
 
-  margin-bottom: 26px;
+  border:
+    1px solid
+    rgba(255,255,255,.25);
 
   background: #111;
 
-  border:
-    1px solid
-    rgba(255,255,255,.20);
-
   box-shadow:
-    0 25px 70px
-    rgba(0,0,0,.70);
+    0 28px 70px
+    rgba(0,0,0,.72);
 
-  transform:
-    scale(1);
-
-  will-change: transform;
+  will-change:
+    transform;
 }
 
 .thumbnail img {
+
+  position: absolute;
+
   width: 100%;
   height: 100%;
-
-  display: block;
 
   object-fit: cover;
 
   transform:
-    scale(1);
+    scale(1.04);
 
-  will-change: transform;
+  will-change:
+    transform;
 }
 
-/* REFLEJO */
+/* ========================================
+   MINIATURA OSCURA
+======================================== */
 
-.thumbnail::after {
-  content: "";
+.thumbDark {
 
   position: absolute;
 
@@ -468,25 +811,56 @@ body {
 
   background:
     linear-gradient(
-      115deg,
-      transparent 35%,
-      rgba(255,255,255,.22) 48%,
-      transparent 60%
+      180deg,
+      transparent 45%,
+      rgba(0,0,0,.35)
+    );
+}
+
+/* ========================================
+   BRILLO MINIATURA
+======================================== */
+
+.shine {
+
+  position: absolute;
+
+  top: 0;
+  bottom: 0;
+
+  width: 180px;
+
+  left: -230px;
+
+  background:
+    linear-gradient(
+      90deg,
+      transparent,
+      rgba(255,255,255,.28),
+      transparent
     );
 
   transform:
-    translateX(-130%);
+    skewX(-18deg);
 
-  pointer-events: none;
+  filter:
+    blur(8px);
+
+  will-change:
+    left;
 }
 
-/* AUTOR */
+/* ========================================
+   TEXTO
+======================================== */
 
 .author {
-  font-size: 30px;
-  font-weight: 900;
 
-  margin-bottom: 5px;
+  margin-top: 23px;
+
+  font-size: 29px;
+
+  font-weight: 900;
 
   text-shadow:
     0 5px 20px
@@ -494,24 +868,26 @@ body {
 }
 
 .nickname {
-  font-size: 15px;
+
+  margin-top: 4px;
 
   color:
-    rgba(255,255,255,.68);
+    rgba(255,255,255,.55);
 
-  margin-bottom: 15px;
+  font-size: 14px;
 }
 
-/* DESCRIPCIÓN */
-
 .description {
-  font-size: 21px;
 
-  line-height: 1.25;
+  margin-top: 13px;
+
+  font-size: 18px;
+
+  line-height: 1.3;
 
   font-weight: 600;
 
-  max-height: 82px;
+  max-height: 70px;
 
   overflow: hidden;
 
@@ -520,50 +896,71 @@ body {
     rgba(0,0,0,.9);
 }
 
-/* ESTADÍSTICAS */
+/* ========================================
+   ESTADÍSTICAS
+======================================== */
 
 .stats {
-  display: flex;
-  gap: 10px;
 
-  margin-top: 20px;
+  display: flex;
+
+  gap: 9px;
+
+  margin-top: 17px;
 }
 
 .stat {
-  padding: 10px 14px;
 
-  border-radius: 15px;
+  padding:
+    9px 13px;
+
+  border-radius: 14px;
 
   background:
-    rgba(0,0,0,.48);
+    rgba(0,0,0,.40);
 
   border:
     1px solid
-    rgba(255,255,255,.14);
+    rgba(255,255,255,.15);
 
-  font-size: 13px;
+  backdrop-filter:
+    blur(18px);
+
+  font-size: 12px;
+
   font-weight: 800;
 
-  backdrop-filter: blur(15px);
+  will-change:
+    transform;
 }
 
-/* FOOTER */
+/* ========================================
+   FOOTER
+======================================== */
 
 .footer {
+
   display: flex;
 
   align-items: center;
-  justify-content: space-between;
 
-  padding-top: 18px;
+  justify-content:
+    space-between;
+
+  padding-top: 17px;
 
   border-top:
     1px solid
-    rgba(255,255,255,.14);
+    rgba(255,255,255,.13);
+
+  will-change:
+    transform,
+    opacity;
 }
 
 .url {
-  max-width: 470px;
+
+  width: 490px;
 
   overflow: hidden;
 
@@ -571,25 +968,33 @@ body {
 
   text-overflow: ellipsis;
 
-  font-size: 11px;
+  font-size: 10px;
 
   color:
-    rgba(255,255,255,.48);
+    rgba(255,255,255,.40);
 }
 
 .duration {
-  padding: 8px 12px;
+
+  padding:
+    8px 12px;
 
   border-radius: 11px;
 
   background:
     rgba(255,255,255,.10);
 
-  font-size: 13px;
-  font-weight: 800;
+  border:
+    1px solid
+    rgba(255,255,255,.12);
+
+  font-size: 12px;
+
+  font-weight: 900;
 }
 
 </style>
+
 </head>
 
 <body>
@@ -598,11 +1003,15 @@ body {
 
   <div class="background"></div>
 
-  <div class="beam"></div>
+  <div class="orb orb1"></div>
+  <div class="orb orb2"></div>
+  <div class="orb orb3"></div>
 
-  <div class="overlay"></div>
+  <div class="dark"></div>
 
-  <div class="glow"></div>
+  <div class="light"></div>
+
+  <div class="border"></div>
 
   <div class="content">
 
@@ -610,7 +1019,7 @@ body {
 
       <div>
 
-        <div class="brand">
+        <div class="title">
           🎬 TikTok
         </div>
 
@@ -632,22 +1041,30 @@ body {
       <div class="thumbnail">
 
         <img
-          src="${escapeHtml(cover)}"
+          src="data:image/jpeg;base64,${coverBase64}"
         >
 
+        <div class="thumbDark"></div>
+
+        <div class="shine"></div>
+
       </div>
+
 
       <div class="author">
         @${escapeHtml(author)}
       </div>
 
+
       <div class="nickname">
         ${escapeHtml(nickname)}
       </div>
 
+
       <div class="description">
         ${escapeHtml(descripcion)}
       </div>
+
 
       <div class="stats">
 
@@ -685,249 +1102,363 @@ body {
 </div>
 
 </body>
+
 </html>
 `
 
-    await page.setContent(html, {
-      waitUntil: 'networkidle0'
-    })
+      await page.setContent(
+        html,
+        {
+          waitUntil: 'networkidle0'
+        }
+      )
 
-    /*
-    ========================================
-    120 FRAMES
-    12 FPS × 10 SEGUNDOS
-    ========================================
-    */
+      // ====================================
+      // CREAR 120 FRAMES
+      // ====================================
 
-    for (let i = 0; i < FRAMES; i++) {
+      for (
+        let i = 0;
+        i < FRAMES;
+        i++
+      ) {
 
-      const t = i / (FRAMES - 1)
+        const progreso =
+          i / (FRAMES - 1)
 
-      await page.evaluate((t) => {
+        const tiempo =
+          progreso *
+          DURACION_CARD
 
-        const bg =
-          document.querySelector('.background')
+        await page.evaluate(
+          ({
+            progreso,
+            tiempo
+          }) => {
 
-        const beam =
-          document.querySelector('.beam')
+            const background =
+              document.querySelector(
+                '.background'
+              )
 
-        const thumb =
-          document.querySelector('.thumbnail')
+            const orb1 =
+              document.querySelector(
+                '.orb1'
+              )
 
-        const thumbImg =
-          document.querySelector('.thumbnail img')
+            const orb2 =
+              document.querySelector(
+                '.orb2'
+              )
 
-        const center =
-          document.querySelector('.center')
+            const orb3 =
+              document.querySelector(
+                '.orb3'
+              )
 
-        const header =
-          document.querySelector('.header')
+            const light =
+              document.querySelector(
+                '.light'
+              )
 
-        const glow =
-          document.querySelector('.glow')
+            const thumbnail =
+              document.querySelector(
+                '.thumbnail'
+              )
 
-        /*
-        ================================
-        FONDO
-        ================================
-        */
+            const image =
+              document.querySelector(
+                '.thumbnail img'
+              )
 
-        const angle =
-          t * Math.PI * 2
+            const shine =
+              document.querySelector(
+                '.shine'
+              )
 
-        const bgX =
-          Math.sin(angle) * 18
+            const center =
+              document.querySelector(
+                '.center'
+              )
 
-        const bgY =
-          Math.cos(angle) * 14
+            const header =
+              document.querySelector(
+                '.header'
+              )
 
-        const bgScale =
-          1.25 +
-          (
-            Math.sin(angle) + 1
-          ) * 0.035
+            const footer =
+              document.querySelector(
+                '.footer'
+              )
 
-        bg.style.transform =
-          `scale(${bgScale}) translate(${bgX}px, ${bgY}px)`
+            const border =
+              document.querySelector(
+                '.border'
+              )
 
-        /*
-        ================================
-        ZOOM MINIATURA
-        ================================
-        */
+            // ==============================
+            // TIEMPO
+            // ==============================
 
-        const zoom =
-          1.015 +
-          (
-            Math.sin(angle * 1.5) + 1
-          ) * 0.018
+            const a =
+              tiempo *
+              Math.PI *
+              2 /
+              DURACION_CARD
 
-        const imgX =
-          Math.sin(angle * 1.2) * 7
+            // ==============================
+            // FONDO
+            // ==============================
 
-        const imgY =
-          Math.cos(angle * 1.1) * 5
+            const bgX =
+              Math.sin(a) * 35
 
-        thumb.style.transform =
-          `scale(${1 + Math.sin(angle) * 0.012})`
+            const bgY =
+              Math.cos(a * .8) * 25
 
-        thumbImg.style.transform =
-          `scale(${zoom}) translate(${imgX}px, ${imgY}px)`
+            const bgScale =
+              1.15 +
+              (
+                Math.sin(a) + 1
+              ) * .035
 
-        /*
-        ================================
-        REFLEJO
-        ================================
-        */
+            background.style.transform =
+              `translate(${bgX}px, ${bgY}px) scale(${bgScale})`
 
-        const shine =
-          -130 +
-          t * 260
+            // ==============================
+            // ORBES
+            // ==============================
 
-        thumb.style.setProperty(
-          '--shine',
-          `${shine}%`
-        )
+            orb1.style.transform =
+              `translate(
+                ${Math.sin(a * 1.4) * 120}px,
+                ${Math.cos(a) * 80}px
+              ) scale(
+                ${1 + Math.sin(a) * .12}
+              )`
 
-        /*
-        ================================
-        LUZ
-        ================================
-        */
+            orb2.style.transform =
+              `translate(
+                ${Math.cos(a * 1.1) * 100}px,
+                ${Math.sin(a * .8) * 100}px
+              ) scale(
+                ${1 + Math.cos(a) * .15}
+              )`
 
-        const beamX =
-          -500 +
-          t * 1500
+            orb3.style.transform =
+              `translate(
+                ${Math.sin(a * .7) * 90}px,
+                ${Math.cos(a * 1.2) * 70}px
+              )`
 
-        beam.style.left =
-          `${beamX}px`
+            // ==============================
+            // LUZ
+            // ==============================
 
-        beam.style.opacity =
-          String(
-            0.65 +
-            Math.sin(angle) * 0.25
-          )
+            const lightX =
+              -450 +
+              progreso * 1150
 
-        /*
-        ================================
-        CONTENIDO
-        ================================
-        */
+            light.style.left =
+              `${lightX}px`
 
-        const contentY =
-          Math.sin(angle * 0.5) * 4
+            // ==============================
+            // MINIATURA
+            // ==============================
 
-        center.style.transform =
-          `translateY(${contentY}px)`
+            const thumbScale =
+              1 +
+              (
+                Math.sin(a * 1.4) + 1
+              ) * .018
 
-        header.style.transform =
-          `translateY(${Math.cos(angle) * 3}px)`
+            const thumbY =
+              Math.sin(a) * 5
 
-        /*
-        ================================
-        BORDE
-        ================================
-        */
+            thumbnail.style.transform =
+              `translateY(${thumbY}px) scale(${thumbScale})`
 
-        const glowOpacity =
-          0.08 +
-          (
-            Math.sin(angle * 2) + 1
-          ) * 0.10
+            // ==============================
+            // IMAGEN
+            // ==============================
 
-        glow.style.boxShadow =
-          `0 0 35px rgba(255,255,255,${glowOpacity})`
+            const imageScale =
+              1.04 +
+              (
+                Math.sin(a * 1.2) + 1
+              ) * .035
 
-        glow.style.borderColor =
-          `rgba(255,255,255,${glowOpacity + 0.08})`
+            const imageX =
+              Math.sin(a * 1.1) * 9
 
-      }, t)
+            const imageY =
+              Math.cos(a * .9) * 7
 
-      /*
-      ==================================
-      CAPTURAR FRAME
-      ==================================
-      */
+            image.style.transform =
+              `translate(
+                ${imageX}px,
+                ${imageY}px
+              ) scale(${imageScale})`
 
-      const screenshot =
-        await page.screenshot({
-          type: 'png'
-        })
+            // ==============================
+            // SHINE
+            // ==============================
 
-      const framePath =
-        path.join(
-          framesDir,
-          `frame-${String(i).padStart(4, '0')}.png`
-        )
+            const shineX =
+              -230 +
+              progreso * 900
 
-      await sharp(screenshot)
-        .resize(
-          CARD_WIDTH,
-          CARD_HEIGHT,
+            shine.style.left =
+              `${shineX}px`
+
+            // ==============================
+            // CENTRO
+            // ==============================
+
+            const centerY =
+              Math.sin(a * .8) * 4
+
+            center.style.transform =
+              `translateY(${centerY}px)`
+
+            // ==============================
+            // HEADER
+            // ==============================
+
+            header.style.transform =
+              `translateY(
+                ${Math.cos(a) * 3}px
+              )`
+
+            // ==============================
+            // FOOTER
+            // ==============================
+
+            footer.style.transform =
+              `translateY(
+                ${Math.sin(a * .9) * 3}px
+              )`
+
+            // ==============================
+            // BORDE
+            // ==============================
+
+            const glow =
+              .06 +
+              (
+                Math.sin(a * 2) + 1
+              ) * .10
+
+            border.style.boxShadow =
+              `
+              inset 0 0 38px
+              rgba(255,255,255,${glow}),
+
+              0 0 38px
+              rgba(255,255,255,${glow})
+              `
+
+          },
           {
-            fit: 'fill'
+            progreso,
+            tiempo
           }
         )
-        .png({
-          compressionLevel: 6
-        })
-        .toFile(framePath)
+
+        // ==================================
+        // SCREENSHOT
+        // ==================================
+
+        const screenshot =
+          await page.screenshot({
+            type: 'png'
+          })
+
+        const framePath =
+          path.join(
+            framesDir,
+            `frame-${String(i).padStart(4, '0')}.png`
+          )
+
+        await sharp(screenshot)
+          .resize(
+            CARD_WIDTH,
+            CARD_HEIGHT,
+            {
+              fit: 'fill'
+            }
+          )
+          .png({
+            compressionLevel: 6
+          })
+          .toFile(
+            framePath
+          )
+      }
+
+    } finally {
+
+      await browser.close()
     }
 
-  } finally {
-    await browser.close()
-  }
+    // ======================================
+    // FRAMES → MP4
+    // ======================================
 
-  /*
-  ========================================
-  PNG → MP4
-  ========================================
-  */
+    await ejecutarFFmpeg([
+      '-y',
 
-  await ejecutarFFmpeg([
-    '-y',
+      '-framerate',
+      String(FPS),
 
-    '-framerate',
-    String(FPS),
+      '-i',
+      path.join(
+        framesDir,
+        'frame-%04d.png'
+      ),
 
-    '-i',
-    path.join(
-      framesDir,
-      'frame-%04d.png'
-    ),
+      '-t',
+      String(DURACION_CARD),
 
-    '-c:v',
-    'libx264',
+      '-c:v',
+      'libx264',
 
-    '-preset',
-    'veryfast',
+      '-preset',
+      'veryfast',
 
-    '-crf',
-    '23',
+      '-crf',
+      '23',
 
-    '-pix_fmt',
-    'yuv420p',
+      '-pix_fmt',
+      'yuv420p',
 
-    '-movflags',
-    '+faststart',
+      '-r',
+      String(FPS),
 
-    '-r',
-    String(FPS),
+      '-movflags',
+      '+faststart',
 
-    outputVideo
-  ])
+      outputVideo
+    ])
 
-  return {
-    file: outputVideo,
-    tempDir
+    return {
+      file: outputVideo,
+      tempDir
+    }
+
+  } catch (error) {
+
+    eliminarDirectorio(
+      tempDir
+    )
+
+    throw error
   }
 }
 
-/*
-========================================
-ENVIAR TIKTOK
-========================================
-*/
+// ==========================================
+// ENVIAR VIDEO
+// ==========================================
 
 async function enviarVideoTikTok(
   conn,
@@ -940,27 +1471,27 @@ async function enviarVideoTikTok(
     video.video?.download
 
   if (!urlVideo) {
-    throw new Error('Sin URL de video')
+    throw new Error(
+      'Sin URL de video'
+    )
   }
 
   let tarjeta = null
 
   try {
 
-    /*
-    ======================================
-    TARJETA ANIMADA
-    ======================================
-    */
+    // ======================================
+    // CREAR TARJETA
+    // ======================================
 
     tarjeta =
-      await crearTarjetaTikTok(video)
+      await crearTarjetaTikTok(
+        video
+      )
 
-    /*
-    ======================================
-    ENVIAR TARJETA
-    ======================================
-    */
+    // ======================================
+    // ENVIAR TARJETA ANIMADA
+    // ======================================
 
     await conn.sendMessage(
       m.chat,
@@ -976,19 +1507,19 @@ async function enviarVideoTikTok(
         gifPlayback:
           true,
 
-        caption: ''
+        caption:
+          ''
       },
       {
-        quoted: m.raw
+        quoted:
+          m.raw
       }
     )
 
-    /*
-    ======================================
-    TIKTOK ORIGINAL
-    SIN COMPRESIÓN
-    ======================================
-    */
+    // ======================================
+    // ENVIAR TIKTOK ORIGINAL
+    // SIN COMPRESIÓN
+    // ======================================
 
     const caption =
       `🎬 *@${video.author?.uniqueId || '?'}* ` +
@@ -1023,7 +1554,8 @@ async function enviarVideoTikTok(
         caption
       },
       {
-        quoted: m.raw
+        quoted:
+          m.raw
       }
     )
 
@@ -1037,11 +1569,9 @@ async function enviarVideoTikTok(
   }
 }
 
-/*
-========================================
-LISTA
-========================================
-*/
+// ==========================================
+// LISTA TIKTOK
+// ==========================================
 
 async function enviarListaTikTok(
   conn,
@@ -1081,7 +1611,10 @@ async function enviarListaTikTok(
 
               titulo:
                 `@${v.author?.uniqueId || '?'} · ` +
-                `${v.desc?.slice(0, 40) || 'Sin desc'}`,
+                `${v.desc?.slice(
+                  0,
+                  40
+                ) || 'Sin desc'}`,
 
               id:
                 `${usedPrefix}tiktokget ${i}`,
@@ -1105,11 +1638,9 @@ async function enviarListaTikTok(
   )
 }
 
-/*
-========================================
-BOTÓN MÁS
-========================================
-*/
+// ==========================================
+// BOTÓN MÁS
+// ==========================================
 
 async function enviarBotonMas(
   conn,
@@ -1147,11 +1678,9 @@ async function enviarBotonMas(
   )
 }
 
-/*
-========================================
-HANDLER
-========================================
-*/
+// ==========================================
+// HANDLER
+// ==========================================
 
 let handler = async (
   m,
@@ -1172,11 +1701,9 @@ let handler = async (
   const clave =
     claveBusqueda(m)
 
-  /*
-  ======================================
-  TIKTOKGET
-  ======================================
-  */
+  // ========================================
+  // TIKTOKGET
+  // ========================================
 
   if (comando === 'tiktokget') {
 
@@ -1201,7 +1728,8 @@ let handler = async (
             `> Usa ${usedPrefix}tiktok de nuevo.`
         },
         {
-          quoted: m.raw
+          quoted:
+            m.raw
         }
       )
     }
@@ -1247,7 +1775,8 @@ let handler = async (
             `> ${e.message}`
         },
         {
-          quoted: m.raw
+          quoted:
+            m.raw
         }
       )
     }
@@ -1255,11 +1784,9 @@ let handler = async (
     return
   }
 
-  /*
-  ======================================
-  TIKTOKMAS
-  ======================================
-  */
+  // ========================================
+  // TIKTOKMAS
+  // ========================================
 
   if (comando === 'tiktokmas') {
 
@@ -1279,7 +1806,8 @@ let handler = async (
             `> Usa ${usedPrefix}tiktok de nuevo.`
         },
         {
-          quoted: m.raw
+          quoted:
+            m.raw
         }
       )
     }
@@ -1293,11 +1821,9 @@ let handler = async (
     )
   }
 
-  /*
-  ======================================
-  SIN TEXTO
-  ======================================
-  */
+  // ========================================
+  // SIN TEXTO
+  // ========================================
 
   if (
     !text ||
@@ -1313,7 +1839,8 @@ let handler = async (
           `${usedPrefix}tiktok goku`
       },
       {
-        quoted: m.raw
+        quoted:
+          m.raw
       }
     )
   }
@@ -1321,11 +1848,9 @@ let handler = async (
   const query =
     text.trim()
 
-  /*
-  ======================================
-  BUSCAR
-  ======================================
-  */
+  // ========================================
+  // BUSCAR
+  // ========================================
 
   try {
 
@@ -1337,12 +1862,15 @@ let handler = async (
           `> ${query}`
       },
       {
-        quoted: m.raw
+        quoted:
+          m.raw
       }
     )
 
     const videos =
-      await buscarTikTok(query)
+      await buscarTikTok(
+        query
+      )
 
     if (!videos.length) {
 
@@ -1354,7 +1882,8 @@ let handler = async (
             `> ${query}`
         },
         {
-          quoted: m.raw
+          quoted:
+            m.raw
         }
       )
     }
@@ -1402,11 +1931,16 @@ let handler = async (
           `> ${error.message}`
       },
       {
-        quoted: m.raw
+        quoted:
+          m.raw
       }
     )
   }
 }
+
+// ==========================================
+// CONFIGURACIÓN DEL COMANDO
+// ==========================================
 
 handler.help = [
   'tiktok <búsqueda>'
