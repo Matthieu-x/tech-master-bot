@@ -1,7 +1,9 @@
 const { enviarBotones, enviarLista } = require('../lib/botones')
+
 const puppeteer = require('puppeteer')
 const sharp = require('sharp')
 const ffmpegPath = require('ffmpeg-static')
+
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
@@ -21,7 +23,7 @@ const ORBIT_IP =
   process.env.ORBIT_IP || '10.25.121.79'
 
 // ==========================================
-// BÚSQUEDA
+// CONFIGURACIÓN
 // ==========================================
 
 const TIEMPO_SELECCION_MS =
@@ -30,20 +32,15 @@ const TIEMPO_SELECCION_MS =
 const MAX_RESULTADOS = 10
 
 // ==========================================
-// TARJETA ANIMADA
+// TARJETA
 // ==========================================
 
 const CARD_WIDTH = 720
 const CARD_HEIGHT = 900
 
 const FPS = 12
-
-// IMPORTANTE:
-// duración de la tarjeta animada
 const CARD_DURATION = 10
-
-const FRAMES =
-  FPS * CARD_DURATION
+const FRAMES = FPS * CARD_DURATION
 
 // ==========================================
 // PENDIENTES
@@ -64,10 +61,7 @@ function limpiarVencidas() {
 
   const ahora = Date.now()
 
-  for (
-    const [clave, valor]
-    of pendientes
-  ) {
+  for (const [clave, valor] of pendientes) {
 
     if (
       !valor ||
@@ -84,40 +78,21 @@ function limpiarVencidas() {
 
 function claveBusqueda(m) {
 
-  return `${
-    m.chat
-  }_${
-    m.senderNumero || m.sender
-  }`
+  return `${m.chat}_${m.senderNumero || m.sender}`
 }
 
 // ==========================================
-// ESCAPAR HTML
+// HTML SAFE
 // ==========================================
 
 function escapeHtml(text = '') {
 
   return String(text)
-    .replace(
-      /&/g,
-      '&amp;'
-    )
-    .replace(
-      /</g,
-      '&lt;'
-    )
-    .replace(
-      />/g,
-      '&gt;'
-    )
-    .replace(
-      /"/g,
-      '&quot;'
-    )
-    .replace(
-      /'/g,
-      '&#039;'
-    )
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
 }
 
 // ==========================================
@@ -129,21 +104,15 @@ function formatearNumero(n) {
   n = Number(n) || 0
 
   if (n >= 1000000000) {
-    return (
-      n / 1000000000
-    ).toFixed(1) + 'B'
+    return (n / 1000000000).toFixed(1) + 'B'
   }
 
   if (n >= 1000000) {
-    return (
-      n / 1000000
-    ).toFixed(1) + 'M'
+    return (n / 1000000).toFixed(1) + 'M'
   }
 
   if (n >= 1000) {
-    return (
-      n / 1000
-    ).toFixed(1) + 'K'
+    return (n / 1000).toFixed(1) + 'K'
   }
 
   return String(n)
@@ -155,8 +124,7 @@ function formatearNumero(n) {
 
 function formatearDuracion(seg) {
 
-  const s =
-    Number(seg) || 0
+  const s = Number(seg) || 0
 
   const minutos =
     Math.floor(s / 60)
@@ -164,14 +132,11 @@ function formatearDuracion(seg) {
   const segundos =
     s % 60
 
-  return (
-    `${minutos}:` +
-    `${String(segundos).padStart(2, '0')}`
-  )
+  return `${minutos}:${String(segundos).padStart(2, '0')}`
 }
 
 // ==========================================
-// ORBIT FETCH
+// ORBIT
 // ==========================================
 
 async function orbitFetch(
@@ -191,8 +156,7 @@ async function orbitFetch(
   const res =
     await fetch(url, {
       headers: {
-        'x-orbit-ip':
-          ORBIT_IP
+        'x-orbit-ip': ORBIT_IP
       }
     })
 
@@ -225,7 +189,7 @@ async function orbitFetch(
 }
 
 // ==========================================
-// BUSCAR TIKTOK
+// BUSCAR
 // ==========================================
 
 async function buscarTikTok(query) {
@@ -233,9 +197,7 @@ async function buscarTikTok(query) {
   const data =
     await orbitFetch(
       'tiktok-search',
-      {
-        query
-      }
+      { query }
     )
 
   if (
@@ -243,7 +205,6 @@ async function buscarTikTok(query) {
     data.status !== true ||
     !Array.isArray(data.results)
   ) {
-
     throw new Error(
       data?.error ||
       'Respuesta inválida'
@@ -273,8 +234,7 @@ function ejecutarFFmpeg(args) {
       proceso.stderr.on(
         'data',
         data => {
-          stderr +=
-            data.toString()
+          stderr += data.toString()
         }
       )
 
@@ -289,14 +249,13 @@ function ejecutarFFmpeg(args) {
 
           if (code === 0) {
             resolve()
-            return
-          }
-
-          reject(
-            new Error(
-              `FFmpeg terminó con código ${code}\n${stderr}`
+          } else {
+            reject(
+              new Error(
+                `FFmpeg terminó con código ${code}\n${stderr}`
+              )
             )
-          )
+          }
         }
       )
     }
@@ -304,7 +263,7 @@ function ejecutarFFmpeg(args) {
 }
 
 // ==========================================
-// ELIMINAR TEMPORALES
+// LIMPIAR TEMP
 // ==========================================
 
 function eliminarDirectorio(dir) {
@@ -335,7 +294,7 @@ function eliminarDirectorio(dir) {
 }
 
 // ==========================================
-// DESCARGAR MINIATURA
+// MINIATURA
 // ==========================================
 
 async function descargarMiniatura(
@@ -347,7 +306,6 @@ async function descargarMiniatura(
     await fetch(url)
 
   if (!res.ok) {
-
     throw new Error(
       `No se pudo descargar la miniatura: HTTP ${res.status}`
     )
@@ -376,11 +334,12 @@ async function descargarMiniatura(
 }
 
 // ==========================================
-// CREAR TARJETA ANIMADA
+// CREAR IMAGEN BASE
 // ==========================================
 
-async function crearTarjetaTikTok(
-  video
+async function crearImagenBase(
+  video,
+  tempDir
 ) {
 
   const cover =
@@ -389,32 +348,10 @@ async function crearTarjetaTikTok(
     video.video?.dynamicCover
 
   if (!cover) {
-
     throw new Error(
       'El TikTok no proporcionó miniatura'
     )
   }
-
-  const tempDir =
-    fs.mkdtempSync(
-      path.join(
-        os.tmpdir(),
-        'tiktok-card-'
-      )
-    )
-
-  const framesDir =
-    path.join(
-      tempDir,
-      'frames'
-    )
-
-  fs.mkdirSync(
-    framesDir,
-    {
-      recursive: true
-    }
-  )
 
   const coverPath =
     path.join(
@@ -422,108 +359,54 @@ async function crearTarjetaTikTok(
       'cover.jpg'
     )
 
-  const outputVideo =
-    path.join(
-      tempDir,
-      'card.mp4'
-    )
+  await descargarMiniatura(
+    cover,
+    coverPath
+  )
 
-  try {
-
-    // ======================================
-    // MINIATURA
-    // ======================================
-
-    await descargarMiniatura(
-      cover,
+  const coverBase64 =
+    fs.readFileSync(
       coverPath
+    ).toString('base64')
+
+  const author =
+    video.author?.uniqueId || '?'
+
+  const nickname =
+    video.author?.nickname || ''
+
+  const descripcion =
+    video.desc || 'Sin descripción'
+
+  const views =
+    formatearNumero(
+      video.stats?.playCount
     )
 
-    const coverBase64 =
-      fs.readFileSync(
-        coverPath
-      ).toString(
-        'base64'
-      )
+  const likes =
+    formatearNumero(
+      video.stats?.diggCount
+    )
 
-    // ======================================
-    // DATOS
-    // ======================================
+  const comments =
+    formatearNumero(
+      video.stats?.commentCount
+    )
 
-    const author =
-      video.author?.uniqueId ||
-      '?'
+  const duration =
+    formatearDuracion(
+      video.video?.duration
+    )
 
-    const nickname =
-      video.author?.nickname ||
-      ''
+  const url =
+    video.url || ''
 
-    const descripcion =
-      video.desc ||
-      'Sin descripción'
+  // ========================================
+  // HTML
+  // ========================================
 
-    const views =
-      formatearNumero(
-        video.stats?.playCount
-      )
-
-    const likes =
-      formatearNumero(
-        video.stats?.diggCount
-      )
-
-    const comments =
-      formatearNumero(
-        video.stats?.commentCount
-      )
-
-    const duration =
-      formatearDuracion(
-        video.video?.duration
-      )
-
-    const url =
-      video.url || ''
-
-    // ======================================
-    // PUPPETEER
-    // ======================================
-
-    const browser =
-      await puppeteer.launch({
-
-        headless: true,
-
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage'
-        ]
-
-      })
-
-    try {
-
-      const page =
-        await browser.newPage()
-
-      await page.setViewport({
-        width:
-          CARD_WIDTH,
-
-        height:
-          CARD_HEIGHT,
-
-        deviceScaleFactor: 1
-      })
-
-      // ====================================
-      // HTML
-      // ====================================
-
-      const html = `
+  const html = `
 <!DOCTYPE html>
-
 <html>
 
 <head>
@@ -579,58 +462,48 @@ body {
 
   position: absolute;
 
-  width: 950px;
-  height: 1150px;
-
-  left: -115px;
-  top: -125px;
+  inset: -100px;
 
   background:
 
     radial-gradient(
       circle at 20% 20%,
-      rgba(255,255,255,.20),
-      transparent 23%
+      rgba(255,255,255,.18),
+      transparent 24%
     ),
 
     radial-gradient(
-      circle at 85% 25%,
-      rgba(255,40,130,.18),
+      circle at 85% 20%,
+      rgba(255,0,120,.18),
       transparent 28%
     ),
 
     radial-gradient(
       circle at 70% 85%,
-      rgba(80,120,255,.20),
+      rgba(80,100,255,.20),
       transparent 30%
     ),
 
     radial-gradient(
-      circle at 25% 80%,
-      rgba(180,60,255,.13),
+      circle at 20% 85%,
+      rgba(160,50,255,.15),
       transparent 28%
     ),
 
     linear-gradient(
       135deg,
-      #030303,
-      #161616,
-      #070707,
-      #191919
+      #020202,
+      #151515,
+      #050505,
+      #181818
     );
 
   filter:
-    blur(28px);
-
-  transform:
-    scale(1.15);
-
-  will-change:
-    transform;
+    blur(20px);
 }
 
 /* ========================================
-   ORBES
+   LUCES
 ======================================== */
 
 .orb {
@@ -640,40 +513,37 @@ body {
   border-radius: 50%;
 
   filter:
-    blur(45px);
-
-  will-change:
-    transform;
+    blur(55px);
 }
 
 .orb1 {
 
-  width: 300px;
-  height: 300px;
+  width: 330px;
+  height: 330px;
 
-  left: -120px;
+  left: -150px;
   top: 100px;
 
   background:
-    rgba(255,255,255,.12);
+    rgba(255,255,255,.11);
 }
 
 .orb2 {
 
-  width: 330px;
-  height: 330px;
+  width: 340px;
+  height: 340px;
 
-  right: -130px;
+  right: -140px;
   bottom: 100px;
 
   background:
-    rgba(255,30,130,.12);
+    rgba(255,20,130,.13);
 }
 
 .orb3 {
 
-  width: 250px;
-  height: 250px;
+  width: 280px;
+  height: 280px;
 
   left: 230px;
   top: 330px;
@@ -695,45 +565,11 @@ body {
   background:
     linear-gradient(
       180deg,
-      rgba(0,0,0,.12),
-      rgba(0,0,0,.25) 42%,
-      rgba(0,0,0,.70) 72%,
-      rgba(0,0,0,.96)
+      rgba(0,0,0,.10),
+      rgba(0,0,0,.30) 45%,
+      rgba(0,0,0,.72) 72%,
+      rgba(0,0,0,.97)
     );
-}
-
-/* ========================================
-   LUZ
-======================================== */
-
-.light {
-
-  position: absolute;
-
-  width: 160px;
-  height: 1400px;
-
-  top: -260px;
-  left: -420px;
-
-  transform:
-    rotate(24deg);
-
-  background:
-    linear-gradient(
-      90deg,
-      transparent,
-      rgba(255,255,255,.04),
-      rgba(255,255,255,.30),
-      rgba(255,255,255,.04),
-      transparent
-    );
-
-  filter:
-    blur(18px);
-
-  will-change:
-    left;
 }
 
 /* ========================================
@@ -750,14 +586,42 @@ body {
 
   border:
     1px solid
-    rgba(255,255,255,.23);
+    rgba(255,255,255,.25);
 
   box-shadow:
     inset 0 0 35px
     rgba(255,255,255,.08);
+}
 
-  will-change:
-    box-shadow;
+/* ========================================
+   LUZ DIAGONAL
+======================================== */
+
+.light {
+
+  position: absolute;
+
+  width: 170px;
+  height: 1400px;
+
+  top: -250px;
+  left: -400px;
+
+  transform:
+    rotate(24deg);
+
+  background:
+    linear-gradient(
+      90deg,
+      transparent,
+      rgba(255,255,255,.04),
+      rgba(255,255,255,.27),
+      rgba(255,255,255,.04),
+      transparent
+    );
+
+  filter:
+    blur(14px);
 }
 
 /* ========================================
@@ -789,14 +653,11 @@ body {
 
   display: flex;
 
-  align-items: center;
-
   justify-content:
     space-between;
 
-  will-change:
-    transform,
-    opacity;
+  align-items:
+    center;
 }
 
 .title {
@@ -804,13 +665,6 @@ body {
   font-size: 27px;
 
   font-weight: 900;
-
-  letter-spacing:
-    -.5px;
-
-  text-shadow:
-    0 4px 20px
-    rgba(0,0,0,.8);
 }
 
 .creator {
@@ -820,7 +674,7 @@ body {
   font-size: 13px;
 
   color:
-    rgba(255,255,255,.58);
+    rgba(255,255,255,.55);
 
   font-weight: 600;
 }
@@ -840,9 +694,6 @@ body {
     1px solid
     rgba(255,255,255,.20);
 
-  backdrop-filter:
-    blur(18px);
-
   font-size: 11px;
 
   font-weight: 900;
@@ -855,11 +706,7 @@ body {
 .center {
 
   margin-top: auto;
-
   margin-bottom: auto;
-
-  will-change:
-    transform;
 }
 
 /* ========================================
@@ -886,30 +733,15 @@ body {
   box-shadow:
     0 30px 75px
     rgba(0,0,0,.75);
-
-  will-change:
-    transform;
 }
 
 .thumbnail img {
-
-  position: absolute;
 
   width: 100%;
   height: 100%;
 
   object-fit: cover;
-
-  transform:
-    scale(1.04);
-
-  will-change:
-    transform;
 }
-
-/* ========================================
-   OSCURECER MINIATURA
-======================================== */
 
 .thumbDark {
 
@@ -920,14 +752,10 @@ body {
   background:
     linear-gradient(
       180deg,
-      transparent 40%,
-      rgba(0,0,0,.38)
+      transparent 35%,
+      rgba(0,0,0,.40)
     );
 }
-
-/* ========================================
-   REFLEJO
-======================================== */
 
 .shine {
 
@@ -944,7 +772,7 @@ body {
     linear-gradient(
       90deg,
       transparent,
-      rgba(255,255,255,.35),
+      rgba(255,255,255,.38),
       transparent
     );
 
@@ -953,13 +781,10 @@ body {
 
   filter:
     blur(8px);
-
-  will-change:
-    left;
 }
 
 /* ========================================
-   AUTOR
+   DATOS
 ======================================== */
 
 .author {
@@ -969,13 +794,6 @@ body {
   font-size: 29px;
 
   font-weight: 900;
-
-  text-shadow:
-    0 5px 22px
-    rgba(0,0,0,.95);
-
-  will-change:
-    transform;
 }
 
 .nickname {
@@ -987,10 +805,6 @@ body {
   color:
     rgba(255,255,255,.55);
 }
-
-/* ========================================
-   DESCRIPCIÓN
-======================================== */
 
 .description {
 
@@ -1005,10 +819,6 @@ body {
   max-height: 70px;
 
   overflow: hidden;
-
-  text-shadow:
-    0 4px 18px
-    rgba(0,0,0,.95);
 }
 
 /* ========================================
@@ -1038,15 +848,9 @@ body {
     1px solid
     rgba(255,255,255,.16);
 
-  backdrop-filter:
-    blur(18px);
-
   font-size: 12px;
 
   font-weight: 800;
-
-  will-change:
-    transform;
 }
 
 /* ========================================
@@ -1067,9 +871,6 @@ body {
   border-top:
     1px solid
     rgba(255,255,255,.13);
-
-  will-change:
-    transform;
 }
 
 .url {
@@ -1220,356 +1021,258 @@ body {
 </html>
 `
 
-      await page.setContent(
-        html,
-        {
-          waitUntil:
-            'networkidle0'
-        }
+  // ========================================
+  // PUPPETEER SOLO UNA VEZ
+  // ========================================
+
+  const browser =
+    await puppeteer.launch({
+
+      headless: true,
+
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-gpu'
+      ]
+
+    })
+
+  try {
+
+    const page =
+      await browser.newPage()
+
+    await page.setViewport({
+      width: CARD_WIDTH,
+      height: CARD_HEIGHT,
+      deviceScaleFactor: 1
+    })
+
+    await page.setContent(
+      html,
+      {
+        waitUntil:
+          'networkidle0'
+      }
+    )
+
+    // UNA SOLA CAPTURA
+    const base =
+      await page.screenshot({
+        type: 'png'
+      })
+
+    const basePath =
+      path.join(
+        tempDir,
+        'base.png'
       )
 
-      // ====================================
-      // GENERAR FRAMES
-      // ====================================
+    await sharp(base)
+      .png()
+      .toFile(
+        basePath
+      )
 
-      for (
-        let i = 0;
-        i < FRAMES;
-        i++
-      ) {
+    return basePath
 
-        const progreso =
-          i /
-          (FRAMES - 1)
+  } finally {
 
-        const tiempo =
-          progreso *
-          CARD_DURATION
+    await browser.close()
+  }
+}
 
-        await page.evaluate(
-          ({
-            progreso,
-            tiempo
-          }) => {
+// ==========================================
+// CREAR FRAMES ANIMADOS
+// ==========================================
 
-            const background =
-              document.querySelector(
-                '.background'
-              )
+async function crearFrames(
+  basePath,
+  tempDir
+) {
 
-            const orb1 =
-              document.querySelector(
-                '.orb1'
-              )
+  const framesDir =
+    path.join(
+      tempDir,
+      'frames'
+    )
 
-            const orb2 =
-              document.querySelector(
-                '.orb2'
-              )
-
-            const orb3 =
-              document.querySelector(
-                '.orb3'
-              )
-
-            const light =
-              document.querySelector(
-                '.light'
-              )
-
-            const thumbnail =
-              document.querySelector(
-                '.thumbnail'
-              )
-
-            const image =
-              document.querySelector(
-                '.thumbnail img'
-              )
-
-            const shine =
-              document.querySelector(
-                '.shine'
-              )
-
-            const center =
-              document.querySelector(
-                '.center'
-              )
-
-            const header =
-              document.querySelector(
-                '.header'
-              )
-
-            const footer =
-              document.querySelector(
-                '.footer'
-              )
-
-            const border =
-              document.querySelector(
-                '.border'
-              )
-
-            // ==============================
-            // CICLO
-            // ==============================
-
-            const a =
-              tiempo *
-              Math.PI *
-              2 /
-              5
-
-            // ==============================
-            // FONDO
-            // ==============================
-
-            const bgX =
-              Math.sin(a) *
-              35
-
-            const bgY =
-              Math.cos(a * .8) *
-              25
-
-            const bgScale =
-              1.15 +
-              (
-                Math.sin(a) + 1
-              ) * .035
-
-            background.style.transform =
-              `
-              translate(
-                ${bgX}px,
-                ${bgY}px
-              )
-              scale(${bgScale})
-              `
-
-            // ==============================
-            // ORB 1
-            // ==============================
-
-            orb1.style.transform =
-              `
-              translate(
-                ${Math.sin(a * 1.3) * 120}px,
-                ${Math.cos(a) * 80}px
-              )
-              scale(
-                ${1 + Math.sin(a) * .12}
-              )
-              `
-
-            // ==============================
-            // ORB 2
-            // ==============================
-
-            orb2.style.transform =
-              `
-              translate(
-                ${Math.cos(a * 1.1) * 100}px,
-                ${Math.sin(a * .8) * 100}px
-              )
-              scale(
-                ${1 + Math.cos(a) * .15}
-              )
-              `
-
-            // ==============================
-            // ORB 3
-            // ==============================
-
-            orb3.style.transform =
-              `
-              translate(
-                ${Math.sin(a * .7) * 90}px,
-                ${Math.cos(a * 1.2) * 70}px
-              )
-              `
-
-            // ==============================
-            // LUZ
-            // ==============================
-
-            light.style.left =
-              `${
-                -420 +
-                progreso * 1050
-              }px`
-
-            // ==============================
-            // MINIATURA
-            // ==============================
-
-            const thumbScale =
-              1 +
-              (
-                Math.sin(a * 1.4) + 1
-              ) * .018
-
-            const thumbY =
-              Math.sin(a) * 5
-
-            thumbnail.style.transform =
-              `
-              translateY(
-                ${thumbY}px
-              )
-              scale(
-                ${thumbScale}
-              )
-              `
-
-            // ==============================
-            // IMAGEN
-            // ==============================
-
-            const imageScale =
-              1.04 +
-              (
-                Math.sin(a * 1.2) + 1
-              ) * .035
-
-            const imageX =
-              Math.sin(a * 1.1) * 9
-
-            const imageY =
-              Math.cos(a * .9) * 7
-
-            image.style.transform =
-              `
-              translate(
-                ${imageX}px,
-                ${imageY}px
-              )
-              scale(
-                ${imageScale}
-              )
-              `
-
-            // ==============================
-            // SHINE
-            // ==============================
-
-            shine.style.left =
-              `${
-                -250 +
-                progreso * 900
-              }px`
-
-            // ==============================
-            // CENTRO
-            // ==============================
-
-            center.style.transform =
-              `
-              translateY(
-                ${Math.sin(a * .8) * 4}px
-              )
-              `
-
-            // ==============================
-            // HEADER
-            // ==============================
-
-            header.style.transform =
-              `
-              translateY(
-                ${Math.cos(a) * 3}px
-              )
-              `
-
-            // ==============================
-            // FOOTER
-            // ==============================
-
-            footer.style.transform =
-              `
-              translateY(
-                ${Math.sin(a * .9) * 3}px
-              )
-              `
-
-            // ==============================
-            // BORDE
-            // ==============================
-
-            const glow =
-              .06 +
-              (
-                Math.sin(a * 2) + 1
-              ) * .10
-
-            border.style.boxShadow =
-              `
-              inset 0 0 38px
-              rgba(
-                255,
-                255,
-                255,
-                ${glow}
-              ),
-
-              0 0 38px
-              rgba(
-                255,
-                255,
-                255,
-                ${glow}
-              )
-              `
-
-          },
-          {
-            progreso,
-            tiempo
-          }
-        )
-
-        // ==================================
-        // SCREENSHOT
-        // ==================================
-
-        const screenshot =
-          await page.screenshot({
-            type: 'png'
-          })
-
-        const framePath =
-          path.join(
-            framesDir,
-            `frame-${String(i).padStart(4, '0')}.png`
-          )
-
-        await sharp(
-          screenshot
-        )
-          .resize(
-            CARD_WIDTH,
-            CARD_HEIGHT,
-            {
-              fit: 'fill'
-            }
-          )
-          .png({
-            compressionLevel: 6
-          })
-          .toFile(
-            framePath
-          )
-      }
-
-    } finally {
-
-      await browser.close()
+  fs.mkdirSync(
+    framesDir,
+    {
+      recursive: true
     }
+  )
+
+  const baseBuffer =
+    fs.readFileSync(
+      basePath
+    )
+
+  // ========================================
+  // GENERAR FRAMES
+  // ========================================
+
+  for (
+    let i = 0;
+    i < FRAMES;
+    i++
+  ) {
+
+    const progreso =
+      i / (FRAMES - 1)
+
+    const t =
+      progreso *
+      Math.PI *
+      2
+
+    const x =
+      Math.round(
+        Math.sin(t * 1.3) * 12
+      )
+
+    const y =
+      Math.round(
+        Math.cos(t) * 9
+      )
+
+    const zoom =
+      1 +
+      (
+        Math.sin(t * 1.7) + 1
+      ) * 0.004
+
+    const framePath =
+      path.join(
+        framesDir,
+        `frame-${String(i).padStart(4, '0')}.png`
+      )
+
+    /*
+     * Animación mediante transformaciones
+     * de Sharp.
+     */
+
+    let frame =
+      sharp(baseBuffer)
+
+    // Movimiento horizontal/vertical
+    const left =
+      Math.max(
+        0,
+        Math.min(
+          CARD_WIDTH - 680,
+          20 + x
+        )
+      )
+
+    const top =
+      Math.max(
+        0,
+        Math.min(
+          CARD_HEIGHT - 860,
+          20 + y
+        )
+      )
+
+    // Creamos una ligera variación
+    // del frame para que no sea estático.
+    const resized =
+      await frame
+        .resize({
+          width:
+            Math.round(
+              CARD_WIDTH * zoom
+            ),
+
+          height:
+            Math.round(
+              CARD_HEIGHT * zoom
+            ),
+
+          fit: 'fill'
+        })
+        .png()
+        .toBuffer()
+
+    await sharp({
+      create: {
+        width: CARD_WIDTH,
+        height: CARD_HEIGHT,
+        channels: 4,
+        background: {
+          r: 0,
+          g: 0,
+          b: 0,
+          alpha: 1
+        }
+      }
+    })
+      .composite([
+        {
+          input: resized,
+          left,
+          top
+        }
+      ])
+      .png()
+      .toFile(
+        framePath
+      )
+  }
+
+  return framesDir
+}
+
+// ==========================================
+// CREAR VIDEO DE TARJETA
+// ==========================================
+
+async function crearTarjetaTikTok(
+  video
+) {
+
+  const tempDir =
+    fs.mkdtempSync(
+      path.join(
+        os.tmpdir(),
+        'tiktok-card-'
+      )
+    )
+
+  const output =
+    path.join(
+      tempDir,
+      'card.mp4'
+    )
+
+  try {
 
     // ======================================
-    // FRAMES → MP4
+    // BASE
+    // ======================================
+
+    const base =
+      await crearImagenBase(
+        video,
+        tempDir
+      )
+
+    // ======================================
+    // FRAMES
+    // ======================================
+
+    const frames =
+      await crearFrames(
+        base,
+        tempDir
+      )
+
+    // ======================================
+    // FFMPEG
     // ======================================
 
     await ejecutarFFmpeg([
@@ -1580,7 +1283,7 @@ body {
 
       '-i',
       path.join(
-        framesDir,
+        frames,
         'frame-%04d.png'
       ),
 
@@ -1605,13 +1308,11 @@ body {
       '-movflags',
       '+faststart',
 
-      outputVideo
+      output
     ])
 
     return {
-      file:
-        outputVideo,
-
+      file: output,
       tempDir
     }
 
@@ -1640,7 +1341,6 @@ async function enviarVideoTikTok(
     video.video?.download
 
   if (!urlVideo) {
-
     throw new Error(
       'Sin URL de video'
     )
@@ -1651,7 +1351,7 @@ async function enviarVideoTikTok(
   try {
 
     // ======================================
-    // CREAR TARJETA
+    // TARJETA
     // ======================================
 
     tarjeta =
@@ -1660,7 +1360,7 @@ async function enviarVideoTikTok(
       )
 
     // ======================================
-    // TARJETA ANIMADA
+    // ENVIAR TARJETA
     // ======================================
 
     await conn.sendMessage(
@@ -1687,15 +1387,13 @@ async function enviarVideoTikTok(
     )
 
     // ======================================
-    // VIDEO ORIGINAL
-    // SIN COMPRESIÓN
+    // VIDEO TIKTOK ORIGINAL
     // ======================================
 
     const caption =
       `🎬 *@${
         video.author?.uniqueId || '?'
-      }* ` +
-      `(${
+      }* (${
         video.author?.nickname || ''
       })\n\n` +
 
@@ -1727,6 +1425,8 @@ async function enviarVideoTikTok(
         urlVideo
       }`
 
+    // IMPORTANTE:
+    // NO se comprime.
     return conn.sendMessage(
       m.chat,
       {
@@ -1760,7 +1460,7 @@ async function enviarVideoTikTok(
 }
 
 // ==========================================
-// LISTA
+// LISTA TIKTOK
 // ==========================================
 
 async function enviarListaTikTok(
@@ -1863,7 +1563,7 @@ async function enviarBotonMas(
         `📦 Restantes: ${restantes}`,
 
       footer:
-        `Expira en 5 min`,
+        'Expira en 5 min',
 
       botones: [
         {
@@ -1944,9 +1644,7 @@ let handler = async (
     }
 
     const video =
-      pendiente.videos[
-        indice
-      ]
+      pendiente.videos[indice]
 
     try {
 
@@ -2040,7 +1738,7 @@ let handler = async (
   }
 
   // ========================================
-  // SIN TEXTO
+  // SIN BÚSQUEDA
   // ========================================
 
   if (
@@ -2159,7 +1857,7 @@ let handler = async (
 }
 
 // ==========================================
-// CONFIGURACIÓN
+// EXPORT
 // ==========================================
 
 handler.help = [
