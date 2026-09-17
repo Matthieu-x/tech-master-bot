@@ -1,5 +1,7 @@
 const { enviarBotones, enviarLista } = require('../lib/botones')
 const puppeteer = require('puppeteer')
+const GIFEncoder = require('gif-encoder-2')
+const { PNG } = require('pngjs')
 
 const API_KEY = process.env.ORBIT_API_KEY || 'MATTH-HIEUX'
 const API_BASE = 'https://orbitcloud.hidenfree.com/api/v1'
@@ -48,7 +50,9 @@ async function orbitFetch(path, params = {}) {
 
   if (!res.ok) {
     if (res.status === 401) {
-      throw new Error('API key inválida o IP no registrada (401)')
+      throw new Error(
+        'API key inválida o IP no registrada (401)'
+      )
     }
 
     if (res.status === 403) {
@@ -56,7 +60,9 @@ async function orbitFetch(path, params = {}) {
     }
 
     if (res.status === 429) {
-      throw new Error('Se agotaron las solicitudes (429)')
+      throw new Error(
+        'Se agotaron las solicitudes (429)'
+      )
     }
 
     throw new Error(`HTTP ${res.status}`)
@@ -66,32 +72,38 @@ async function orbitFetch(path, params = {}) {
 }
 
 async function buscarTikTok(query) {
-  const data = await orbitFetch('tiktok-search', {
-    query
-  })
+  const data = await orbitFetch(
+    'tiktok-search',
+    { query }
+  )
 
   if (
     !data ||
     data.status !== true ||
     !Array.isArray(data.results)
   ) {
-    throw new Error(data?.error || 'Respuesta inválida')
+    throw new Error(
+      data?.error || 'Respuesta inválida'
+    )
   }
 
   return data.results
 }
 
 async function descargarTikTokPorUrl(url) {
-  const data = await orbitFetch('download/tiktok', {
-    url
-  })
+  const data = await orbitFetch(
+    'download/tiktok',
+    { url }
+  )
 
   if (
     !data ||
     data.status !== true ||
     !data.data?.video
   ) {
-    throw new Error(data?.error || 'Respuesta inválida')
+    throw new Error(
+      data?.error || 'Respuesta inválida'
+    )
   }
 
   return data.data
@@ -105,11 +117,15 @@ function formatearNumero(n) {
   if (!n) return '0'
 
   if (n >= 1_000_000) {
-    return (n / 1_000_000).toFixed(1) + 'M'
+    return (
+      n / 1_000_000
+    ).toFixed(1) + 'M'
   }
 
   if (n >= 1_000) {
-    return (n / 1_000).toFixed(1) + 'K'
+    return (
+      n / 1_000
+    ).toFixed(1) + 'K'
   }
 
   return String(n)
@@ -117,6 +133,7 @@ function formatearNumero(n) {
 
 function formatearDuracion(seg) {
   const s = Number(seg) || 0
+
   const m = Math.floor(s / 60)
   const r = s % 60
 
@@ -125,8 +142,17 @@ function formatearDuracion(seg) {
     : `${r}s`
 }
 
+function escapeHTML(text) {
+  return String(text || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
 /* ═══════════════════════════════════════
-   TARJETA TIKTOK
+   GENERAR GIF ANIMADO
 ═══════════════════════════════════════ */
 
 async function generarTarjetaTikTok(video) {
@@ -135,7 +161,6 @@ async function generarTarjetaTikTok(video) {
   try {
     const author =
       video.author?.uniqueId ||
-      video.author?.nickname ||
       'Usuario'
 
     const nickname =
@@ -152,33 +177,29 @@ async function generarTarjetaTikTok(video) {
       video.video?.dynamicCover ||
       ''
 
-    const vistas = formatearNumero(
-      video.stats?.playCount
-    )
+    const vistas =
+      formatearNumero(
+        video.stats?.playCount
+      )
 
-    const likes = formatearNumero(
-      video.stats?.diggCount
-    )
+    const likes =
+      formatearNumero(
+        video.stats?.diggCount
+      )
 
-    const comentarios = formatearNumero(
-      video.stats?.commentCount
-    )
+    const comentarios =
+      formatearNumero(
+        video.stats?.commentCount
+      )
 
-    const duracion = formatearDuracion(
-      video.video?.duration
-    )
-
-    const escapeHTML = (text) => {
-      return String(text)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;')
-    }
+    const duracion =
+      formatearDuracion(
+        video.video?.duration
+      )
 
     browser = await puppeteer.launch({
       headless: true,
+
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -189,18 +210,25 @@ async function generarTarjetaTikTok(video) {
       ]
     })
 
-    const page = await browser.newPage()
+    const page =
+      await browser.newPage()
+
+    const WIDTH = 900
+    const HEIGHT = 1050
 
     await page.setViewport({
-      width: 900,
-      height: 1100,
+      width: WIDTH,
+      height: HEIGHT,
       deviceScaleFactor: 1
     })
 
     const html = `
 <!DOCTYPE html>
+
 <html>
+
 <head>
+
 <meta charset="UTF-8">
 
 <style>
@@ -213,57 +241,115 @@ html,
 body {
   margin: 0;
   padding: 0;
-  width: 900px;
-  height: 1100px;
+
+  width: ${WIDTH}px;
+  height: ${HEIGHT}px;
+
+  overflow: hidden;
+
   background: #050505;
-  font-family: Arial, Helvetica, sans-serif;
+
+  font-family:
+    Arial,
+    Helvetica,
+    sans-serif;
 }
 
 body {
   display: flex;
+
   align-items: center;
   justify-content: center;
 }
 
 .card {
+
   width: 820px;
-  min-height: 1000px;
+  height: 970px;
+
+  padding: 30px;
+
+  border-radius: 38px;
+
+  overflow: hidden;
+
+  position: relative;
 
   background:
     radial-gradient(
-      circle at top right,
-      rgba(255, 0, 80, .20),
-      transparent 35%
+      circle at var(--x1) var(--y1),
+      rgba(255, 0, 80, .24),
+      transparent 32%
     ),
+
     radial-gradient(
-      circle at bottom left,
-      rgba(0, 242, 234, .14),
-      transparent 35%
+      circle at var(--x2) var(--y2),
+      rgba(0, 242, 234, .20),
+      transparent 34%
     ),
+
     #101010;
 
-  border: 1px solid rgba(255,255,255,.10);
-  border-radius: 38px;
-
-  padding: 32px;
+  border:
+    1px solid
+    rgba(255,255,255,.10);
 
   box-shadow:
-    0 30px 80px rgba(0,0,0,.65);
+    0 30px 80px
+    rgba(0,0,0,.70);
 
   color: white;
 }
 
+.glow {
+
+  position: absolute;
+
+  width: 300px;
+  height: 300px;
+
+  border-radius: 50%;
+
+  background:
+    radial-gradient(
+      circle,
+      rgba(255,0,80,.20),
+      transparent 70%
+    );
+
+  filter: blur(25px);
+
+  transform:
+    translate(
+      var(--gx),
+      var(--gy)
+    );
+
+  pointer-events: none;
+}
+
 .header {
+
+  height: 65px;
+
   display: flex;
-  justify-content: space-between;
+
   align-items: center;
 
-  margin-bottom: 28px;
+  justify-content:
+    space-between;
+
+  position: relative;
+
+  z-index: 3;
 }
 
 .brand {
-  font-size: 32px;
+
+  font-size: 34px;
+
   font-weight: 900;
+
   letter-spacing: -1px;
 }
 
@@ -271,80 +357,93 @@ body {
   color: #ff0050;
 }
 
-.badge {
-  padding: 10px 18px;
+.creator {
+
+  padding:
+    10px 18px;
+
   border-radius: 30px;
 
-  background: rgba(255,255,255,.08);
-  border: 1px solid rgba(255,255,255,.10);
+  background:
+    rgba(255,255,255,.07);
 
-  font-size: 17px;
-  font-weight: bold;
-}
+  border:
+    1px solid
+    rgba(255,255,255,.10);
 
-.cover-container {
-  width: 100%;
-  height: 560px;
+  font-size: 16px;
 
-  border-radius: 28px;
-
-  overflow: hidden;
-
-  background: #181818;
-
-  position: relative;
+  font-weight: 700;
 }
 
 .cover {
+
   width: 100%;
-  height: 100%;
+  height: 550px;
 
   object-fit: cover;
 
   display: block;
+
+  border-radius: 28px;
+
+  position: relative;
+
+  z-index: 2;
+
+  box-shadow:
+    0 20px 50px
+    rgba(0,0,0,.45);
 }
 
-.cover-overlay {
-  position: absolute;
-  inset: 0;
+.cover-fallback {
 
-  background:
-    linear-gradient(
-      to top,
-      rgba(0,0,0,.75),
-      transparent 45%
-    );
-}
+  width: 100%;
+  height: 550px;
 
-.duration {
-  position: absolute;
+  border-radius: 28px;
 
-  right: 20px;
-  bottom: 20px;
+  background: #181818;
 
-  padding: 9px 14px;
+  display: flex;
 
-  border-radius: 12px;
+  align-items: center;
 
-  background: rgba(0,0,0,.72);
+  justify-content: center;
 
-  font-size: 18px;
-  font-weight: bold;
+  color: #777;
+
+  font-size: 24px;
 }
 
 .author {
-  margin-top: 26px;
 
   display: flex;
+
   align-items: center;
-  gap: 14px;
+
+  gap: 15px;
+
+  margin-top: 24px;
 }
 
 .avatar {
+
   width: 58px;
   height: 58px;
 
+  flex-shrink: 0;
+
   border-radius: 50%;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  font-size: 25px;
+
+  font-weight: 900;
 
   background:
     linear-gradient(
@@ -353,45 +452,57 @@ body {
       #00f2ea
     );
 
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  font-size: 24px;
-  font-weight: 900;
+  box-shadow:
+    0 0 25px
+    rgba(255,0,80,.20);
 }
 
 .username {
+
   font-size: 23px;
+
   font-weight: 800;
 }
 
 .nickname {
+
   margin-top: 4px;
 
   color: #999;
 
-  font-size: 16px;
+  font-size: 15px;
 }
 
 .description {
-  margin-top: 22px;
 
-  padding: 20px;
+  margin-top: 20px;
+
+  padding: 18px;
+
+  min-height: 70px;
+
+  max-height: 92px;
+
+  overflow: hidden;
 
   border-radius: 20px;
 
-  background: rgba(255,255,255,.055);
+  background:
+    rgba(255,255,255,.055);
+
+  border:
+    1px solid
+    rgba(255,255,255,.05);
 
   color: #eee;
 
-  font-size: 19px;
-  line-height: 1.45;
+  font-size: 17px;
 
-  min-height: 80px;
+  line-height: 1.4;
 }
 
 .stats {
+
   display: grid;
 
   grid-template-columns:
@@ -399,56 +510,78 @@ body {
 
   gap: 14px;
 
-  margin-top: 20px;
+  margin-top: 17px;
 }
 
 .stat {
-  padding: 18px 10px;
 
-  text-align: center;
+  padding: 15px 8px;
 
   border-radius: 18px;
 
-  background: rgba(255,255,255,.055);
+  text-align: center;
 
-  border: 1px solid rgba(255,255,255,.06);
+  background:
+    rgba(255,255,255,.055);
+
+  border:
+    1px solid
+    rgba(255,255,255,.06);
 }
 
-.stat-number {
-  font-size: 24px;
+.number {
+
+  font-size: 22px;
+
   font-weight: 900;
 }
 
-.stat-name {
-  margin-top: 5px;
+.label {
 
-  color: #999;
+  margin-top: 4px;
 
-  font-size: 14px;
+  color: #888;
+
+  font-size: 12px;
+
+  font-weight: 700;
 }
 
-.footer {
-  margin-top: 26px;
+.duration {
 
-  display: flex;
+  position: absolute;
 
-  justify-content: space-between;
+  right: 50px;
 
-  color: #777;
+  top: 570px;
 
-  font-size: 14px;
-}
+  z-index: 5;
 
-.footer strong {
-  color: #aaa;
+  padding:
+    9px 14px;
+
+  border-radius: 12px;
+
+  background:
+    rgba(0,0,0,.75);
+
+  font-size: 16px;
+
+  font-weight: 800;
 }
 
 </style>
+
 </head>
 
 <body>
 
-<div class="card">
+<div
+  class="card"
+  id="card"
+>
+
+  <div class="glow"></div>
 
   <div class="header">
 
@@ -456,52 +589,36 @@ body {
       <span>♪</span> TikTok
     </div>
 
-    <div class="badge">
-      Duan TikTok
+    <div class="creator">
+      Creator · Matthieu
     </div>
 
   </div>
 
-  <div class="cover-container">
+  ${
+    cover
+      ? `
+        <img
+          class="cover"
+          src="${escapeHTML(cover)}"
+        >
+      `
+      : `
+        <div class="cover-fallback">
+          Sin portada disponible
+        </div>
+      `
+  }
 
-    ${
-      cover
-        ? `
-          <img
-            class="cover"
-            src="${escapeHTML(cover)}"
-          >
-        `
-        : `
-          <div
-            style="
-              width:100%;
-              height:100%;
-              display:flex;
-              align-items:center;
-              justify-content:center;
-              color:#777;
-              font-size:24px;
-            "
-          >
-            Sin portada disponible
-          </div>
-        `
-    }
-
-    <div class="cover-overlay"></div>
-
-    <div class="duration">
-      ${escapeHTML(duracion)}
-    </div>
-
+  <div class="duration">
+    ${escapeHTML(duracion)}
   </div>
 
   <div class="author">
 
     <div class="avatar">
       ${escapeHTML(
-        String(author)
+        author
           .charAt(0)
           .toUpperCase()
       )}
@@ -528,45 +645,39 @@ body {
   <div class="stats">
 
     <div class="stat">
-      <div class="stat-number">
+
+      <div class="number">
         ${vistas}
       </div>
 
-      <div class="stat-name">
+      <div class="label">
         VISTAS
       </div>
+
     </div>
 
     <div class="stat">
-      <div class="stat-number">
+
+      <div class="number">
         ${likes}
       </div>
 
-      <div class="stat-name">
+      <div class="label">
         LIKES
       </div>
+
     </div>
 
     <div class="stat">
-      <div class="stat-number">
+
+      <div class="number">
         ${comentarios}
       </div>
 
-      <div class="stat-name">
+      <div class="label">
         COMENTARIOS
       </div>
-    </div>
 
-  </div>
-
-  <div class="footer">
-
-    <div>
-      TikTok Search
-    </div>
-
-    <div>
-      Powered by <strong>Duan</strong>
     </div>
 
   </div>
@@ -574,47 +685,208 @@ body {
 </div>
 
 </body>
+
 </html>
 `
 
-    await page.setContent(html, {
-      waitUntil: 'networkidle0'
-    })
+    await page.setContent(
+      html,
+      {
+        waitUntil:
+          'networkidle0'
+      }
+    )
 
-    // Esperar a que las imágenes terminen de cargar
+    // Esperar imágenes
     await page.evaluate(async () => {
-      const images = Array.from(
-        document.images
-      )
+
+      const images =
+        Array.from(
+          document.images
+        )
 
       await Promise.all(
         images.map(img => {
-          if (img.complete) return
 
-          return new Promise(resolve => {
-            img.onload = resolve
-            img.onerror = resolve
-          })
+          if (img.complete) {
+            return
+          }
+
+          return new Promise(
+            resolve => {
+
+              img.onload =
+                resolve
+
+              img.onerror =
+                resolve
+            }
+          )
         })
       )
+
     })
 
-    const screenshot = await page.screenshot({
-      type: 'png',
-      fullPage: true
-    })
+    /*
+     * GIF
+     */
 
-    return screenshot
+    const encoder =
+      new GIFEncoder(
+        WIDTH,
+        HEIGHT
+      )
+
+    encoder.setDelay(120)
+    encoder.setRepeat(0)
+    encoder.setQuality(8)
+
+    encoder.start()
+
+    /*
+     * Animación:
+     * mueve el brillo y hace
+     * un pequeño efecto de zoom.
+     */
+
+    const frames = 24
+
+    for (
+      let i = 0;
+      i < frames;
+      i++
+    ) {
+
+      const progress =
+        i / frames
+
+      const angle =
+        progress *
+        Math.PI *
+        2
+
+      const x1 =
+        20 +
+        Math.sin(angle) * 25
+
+      const y1 =
+        20 +
+        Math.cos(angle) * 20
+
+      const x2 =
+        80 +
+        Math.cos(angle) * 20
+
+      const y2 =
+        80 +
+        Math.sin(angle) * 25
+
+      const gx =
+        Math.sin(angle) * 120
+
+      const gy =
+        Math.cos(angle) * 90
+
+      await page.evaluate(
+        ({
+          x1,
+          y1,
+          x2,
+          y2,
+          gx,
+          gy,
+          progress
+        }) => {
+
+          const card =
+            document.getElementById(
+              'card'
+            )
+
+          card.style.setProperty(
+            '--x1',
+            `${x1}%`
+          )
+
+          card.style.setProperty(
+            '--y1',
+            `${y1}%`
+          )
+
+          card.style.setProperty(
+            '--x2',
+            `${x2}%`
+          )
+
+          card.style.setProperty(
+            '--y2',
+            `${y2}%`
+          )
+
+          card.style.setProperty(
+            '--gx',
+            `${gx}px`
+          )
+
+          card.style.setProperty(
+            '--gy',
+            `${gy}px`
+          )
+
+          const scale =
+            1 +
+            Math.sin(
+              progress *
+              Math.PI *
+              2
+            ) *
+            0.006
+
+          card.style.transform =
+            `scale(${scale})`
+
+        },
+        {
+          x1,
+          y1,
+          x2,
+          y2,
+          gx,
+          gy,
+          progress
+        }
+      )
+
+      const screenshot =
+        await page.screenshot({
+          type: 'png'
+        })
+
+      const png =
+        PNG.sync.read(
+          screenshot
+        )
+
+      encoder.addFrame(
+        png.data
+      )
+    }
+
+    encoder.finish()
+
+    return encoder.out.getData()
 
   } finally {
+
     if (browser) {
       await browser.close()
     }
+
   }
 }
 
 /* ═══════════════════════════════════════
-   LISTA DE RESULTADOS
+   LISTA
 ═══════════════════════════════════════ */
 
 async function enviarListaTikTok(
@@ -624,55 +896,60 @@ async function enviarListaTikTok(
   usedPrefix,
   query
 ) {
-  return enviarLista(conn, m.chat, {
 
-    texto:
-      `🎬 *TikTok:* ${query}\n\n` +
-      `📦 Resultados: ${videos.length}\n` +
-      `⏳ Selección disponible durante 5 minutos.`,
+  return enviarLista(
+    conn,
+    m.chat,
+    {
 
-    footer:
-      `Toca uno para enviarlo`,
+      texto:
+        `🎬 *TikTok:* ${query}\n\n` +
+        `📦 Resultados: ${videos.length}`,
 
-    titulo:
-      'TikTok Search',
+      footer:
+        'Toca uno para enviarlo · expira en 5 min',
 
-    textoBoton:
-      'Ver videos',
+      titulo:
+        'TikTok Search',
 
-    mensajeCitado:
-      m.raw,
+      textoBoton:
+        'Ver videos',
 
-    secciones: [
+      mensajeCitado:
+        m.raw,
 
-      {
-        titulo:
-          `${videos.length} video(s)`,
+      secciones: [
 
-        filas:
-          videos.map((v, i) => ({
+        {
+          titulo:
+            `${videos.length} video(s)`,
 
-            titulo:
-              `@${v.author?.uniqueId || '?'} · ` +
-              `${v.desc?.slice(0, 40) || 'Sin descripción'}`,
+          filas:
+            videos.map(
+              (v, i) => ({
 
-            id:
-              `${usedPrefix}tiktokget ${i}`,
+                titulo:
+                  `@${v.author?.uniqueId || '?'} · ` +
+                  `${v.desc?.slice(0, 40) || 'Sin desc'}`,
 
-            descripcion:
-              `👁️ ${formatearNumero(v.stats?.playCount)}` +
-              ` · ❤️ ${formatearNumero(v.stats?.diggCount)}` +
-              ` · ⏱️ ${formatearDuracion(v.video?.duration)}`
-          }))
+                id:
+                  `${usedPrefix}tiktokget ${i}`,
 
-      }
+                descripcion:
+                  `👁️ ${formatearNumero(v.stats?.playCount)}` +
+                  ` · ❤️ ${formatearNumero(v.stats?.diggCount)}` +
+                  ` · ⏱️ ${formatearDuracion(v.video?.duration)}`
+              })
+            )
+        }
 
-    ]
-  })
+      ]
+    }
+  )
 }
 
 /* ═══════════════════════════════════════
-   BOTÓN MÁS VIDEOS
+   BOTÓN MÁS
 ═══════════════════════════════════════ */
 
 async function enviarBotonMas(
@@ -682,31 +959,36 @@ async function enviarBotonMas(
   query,
   restantes
 ) {
-  return enviarBotones(conn, m.chat, {
 
-    texto:
-      `✅ *Video enviado*\n\n` +
-      `🔎 Búsqueda: ${query}\n` +
-      `📦 Restantes: ${restantes}`,
+  return enviarBotones(
+    conn,
+    m.chat,
+    {
 
-    footer:
-      `La búsqueda expira en 5 minutos.`,
+      texto:
+        `✅ *Video enviado*\n\n` +
+        `🔎 Búsqueda: ${query}\n` +
+        `📦 Restantes: ${restantes}`,
 
-    botones: [
+      footer:
+        'Expira en 5 min',
 
-      {
-        texto:
-          '🎬 Más videos',
+      botones: [
 
-        id:
-          `${usedPrefix}tiktokmas`
-      }
+        {
+          texto:
+            '🎬 Más videos',
 
-    ],
+          id:
+            `${usedPrefix}tiktokmas`
+        }
 
-    mensajeCitado:
-      m.raw
-  })
+      ],
+
+      mensajeCitado:
+        m.raw
+    }
+  )
 }
 
 /* ═══════════════════════════════════════
@@ -739,9 +1021,11 @@ async function enviarVideoTikTok(
 
   const caption =
     `🎬 *@${author}*` +
-    (nickname
-      ? ` · ${nickname}`
-      : '') +
+    (
+      nickname
+        ? ` (${nickname})`
+        : ''
+    ) +
     `\n\n` +
 
     `📝 ${video.desc || 'Sin descripción'}\n\n` +
@@ -756,51 +1040,60 @@ async function enviarVideoTikTok(
 
     `💬 ${formatearNumero(
       video.stats?.commentCount
-    )} comentarios\n\n` +
+    )} comentarios\n` +
 
     `🔗 ${video.url || ''}`
 
   /*
-   * Primero generamos la tarjeta.
-   * Si Puppeteer falla, NO detenemos
-   * el envío del video.
+   * Generar tarjeta animada
    */
 
   try {
 
     const tarjeta =
-      await generarTarjetaTikTok(video)
+      await generarTarjetaTikTok(
+        video
+      )
 
     await conn.sendMessage(
       m.chat,
       {
-        image: tarjeta,
+        document:
+          tarjeta,
+
+        mimetype:
+          'image/gif',
+
+        fileName:
+          'tiktok.gif',
+
         caption:
           `🎬 *TikTok*\n\n` +
           `@${author}\n` +
-          `✨ Tarjeta generada automáticamente.`
+          `Creator · Matthieu`
       },
       {
         quoted: m.raw
       }
     )
 
-  } catch (error) {
+  } catch (e) {
 
     console.error(
       '[TIKTOK CARD]',
-      error
+      e
     )
 
   }
 
   /*
-   * Enviar el video normalmente
+   * Enviar video
    */
 
   return conn.sendMessage(
     m.chat,
     {
+
       video: {
         url: urlVideo
       },
@@ -809,6 +1102,7 @@ async function enviarVideoTikTok(
         'video/mp4',
 
       caption
+
     },
     {
       quoted: m.raw
@@ -834,16 +1128,17 @@ let handler = async (
   limpiarVencidas()
 
   const comando =
-    (command || '').toLowerCase()
+    (command || '')
+      .toLowerCase()
 
   const clave =
     claveBusqueda(m)
 
-  /* ─────────────────────────────
-     TIKTOKGET
-  ───────────────────────────── */
+  /* TIKTOKGET */
 
-  if (comando === 'tiktokget') {
+  if (
+    comando === 'tiktokget'
+  ) {
 
     const indice =
       Number(args[0])
@@ -862,7 +1157,7 @@ let handler = async (
         m.chat,
         {
           text:
-            `❌ *Esa búsqueda expiró.*\n\n` +
+            `❌ Esa búsqueda expiró.\n\n` +
             `> Usa ${usedPrefix}tiktok de nuevo.`
         },
         {
@@ -886,7 +1181,9 @@ let handler = async (
         pendiente.videos.length -
         (indice + 1)
 
-      if (restantes > 0) {
+      if (
+        restantes > 0
+      ) {
 
         return enviarBotonMas(
           conn,
@@ -896,8 +1193,6 @@ let handler = async (
           restantes
         )
       }
-
-      return
 
     } catch (e) {
 
@@ -910,7 +1205,7 @@ let handler = async (
         m.chat,
         {
           text:
-            `❌ *Error al enviar el video.*\n\n` +
+            `❌ Error al enviar el video.\n\n` +
             `> ${e.message}`
         },
         {
@@ -918,13 +1213,15 @@ let handler = async (
         }
       )
     }
+
+    return
   }
 
-  /* ─────────────────────────────
-     TIKTOKMAS
-  ───────────────────────────── */
+  /* TIKTOKMAS */
 
-  if (comando === 'tiktokmas') {
+  if (
+    comando === 'tiktokmas'
+  ) {
 
     const pendiente =
       pendientes.get(clave)
@@ -938,7 +1235,7 @@ let handler = async (
         m.chat,
         {
           text:
-            `❌ *Expiró la búsqueda.*\n\n` +
+            `❌ Expiró la búsqueda.\n\n` +
             `> Usa ${usedPrefix}tiktok de nuevo.`
         },
         {
@@ -956,9 +1253,7 @@ let handler = async (
     )
   }
 
-  /* ─────────────────────────────
-     SIN TEXTO
-  ───────────────────────────── */
+  /* BÚSQUEDA */
 
   if (
     !text ||
@@ -971,7 +1266,7 @@ let handler = async (
         text:
           `🎬 *TikTok Search*\n\n` +
           `Escribe qué quieres buscar.\n\n` +
-          `📌 *Ejemplo:*\n` +
+          `📌 Ejemplo:\n` +
           `${usedPrefix}tiktok goku`
       },
       {
@@ -982,10 +1277,6 @@ let handler = async (
 
   const query =
     text.trim()
-
-  /* ─────────────────────────────
-     BUSCAR
-  ───────────────────────────── */
 
   try {
 
@@ -1004,14 +1295,16 @@ let handler = async (
     const videos =
       await buscarTikTok(query)
 
-    if (!videos.length) {
+    if (
+      !videos.length
+    ) {
 
       return conn.sendMessage(
         m.chat,
         {
           text:
-            `❌ *No encontré videos.*\n\n` +
-            `🔎 Búsqueda: ${query}`
+            `❌ No encontré videos para:\n` +
+            `> ${query}`
         },
         {
           quoted: m.raw
@@ -1055,7 +1348,7 @@ let handler = async (
       m.chat,
       {
         text:
-          `❌ *Error al buscar TikTok.*\n\n` +
+          `❌ Error al buscar.\n\n` +
           `> ${error.message}`
       },
       {
@@ -1064,10 +1357,6 @@ let handler = async (
     )
   }
 }
-
-/* ═══════════════════════════════════════
-   CONFIGURACIÓN
-═══════════════════════════════════════ */
 
 handler.help = [
   'tiktok <búsqueda>'
